@@ -1,0 +1,33 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build && rm -rf ../api/internal/server/frontend_dist && cp -R dist ../api/internal/server/frontend_dist",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@apache-annotator/dom": "^0.2.0",
+    "@tanstack/react-query": "^5.100.10",
+    "@types/mark.js": "^8.11.12",
+    "lucide-react": "^1.16.0",
+    "mark.js": "^8.11.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-router-dom": "^7.15.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13"
+  },
+  "type": "module",
+  "private": "true"
+}
