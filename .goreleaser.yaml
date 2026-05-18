@@ -1,0 +1,54 @@
+version: 2
+
+project_name: aidocs
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: aidocs
+    main: ./cli
+    binary: aidocs
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: aidocs
+    builds:
+      - aidocs
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    files:
+      - LICENSE
+      - README.md
+      - cli/README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+brews:
+  - name: aidocs
+    homepage: https://github.com/anuragrao/aidocs
+    description: CLI for aidocs HTML document review
+    license: Apache-2.0
+    repository:
+      owner: anuragrao
+      name: homebrew-tap
+    install: |
+      bin.install "aidocs"
+    test: |
+      system "#{bin}/aidocs", "--help"
