@@ -46,7 +46,7 @@ func Execute(args []string) (string, error) {
 }
 func NewRoot(out io.Writer) *cobra.Command {
 	g := &globals{}
-	root := &cobra.Command{Use: "aidocs", Short: "CLI for aidocs HTML document review", SilenceUsage: true, SilenceErrors: true}
+	root := &cobra.Command{Use: "aidocs", Short: "CLI for aidocs HTML document review", Long: "CLI for aidocs HTML document review.\n\nDefault output is compact, agent-friendly key=value text. Use --json for machine-readable JSON.", SilenceUsage: true, SilenceErrors: true}
 	root.SetOut(out)
 	root.SetErr(os.Stderr)
 	root.PersistentFlags().StringVar(&g.server, "server", "", "API server URL")
@@ -204,6 +204,23 @@ func printWithHint(out io.Writer, g *globals, b []byte, hint string) error {
 	return err
 }
 
+func printPushedVersion(out io.Writer, g *globals, docID, server string, b []byte) error {
+	if g.quiet {
+		return nil
+	}
+	if g.json {
+		return print(out, g, b)
+	}
+	var m map[string]any
+	if json.Unmarshal(b, &m) != nil {
+		return print(out, g, b)
+	}
+	m["document_id"] = docID
+	m["url"] = strings.TrimRight(server, "/") + "/documents/" + docID
+	fmt.Fprintln(out, compactRow(m))
+	return nil
+}
+
 func humanize(hint string, x any) string {
 	m, _ := x.(map[string]any)
 	if p, ok := m["principal"].(map[string]any); ok {
@@ -293,7 +310,7 @@ func compactRow(m map[string]any) string {
 		return "OK"
 	}
 	parts := []string{}
-	for _, k := range []string{"id", "title", "name", "email", "type", "role", "status", "disabled", "current_version_id", "number", "sha256", "token", "selected_text", "body"} {
+	for _, k := range []string{"id", "document_id", "title", "name", "email", "type", "role", "status", "disabled", "current_version_id", "number", "sha256", "token", "selected_text", "body", "url"} {
 		if v := value(m, k); v != nil && fmt.Sprint(v) != "" {
 			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
 		}
@@ -737,7 +754,7 @@ func pushVersionCmd(g *globals, out io.Writer, use, short, example string, resol
 		if e != nil {
 			return e
 		}
-		return print(out, g, b)
+		return printPushedVersion(out, g, doc, cl.Base, b)
 	}}
 	cmd.Flags().StringVar(&base, "base-version", "", "base version ID")
 	cmd.Flags().StringVar(&summary, "summary", "", "change summary")
@@ -747,7 +764,7 @@ func pushVersionCmd(g *globals, out io.Writer, use, short, example string, resol
 func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "comments", Short: "Manage document review comments"}
 	var status, version, body, quote, prefix, suffix, ustatus string
-	list := &cobra.Command{Use: "list <doc_id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	list := &cobra.Command{Use: "list <doc_id>", Short: "List document comments", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		q := url.Values{}
 		if status != "" {
 			q.Set("status", status)
@@ -771,7 +788,7 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 	}}
 	list.Flags().StringVar(&status, "status", "", "")
 	list.Flags().StringVar(&version, "version", "", "")
-	create := &cobra.Command{Use: "create <doc_id>", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	create := &cobra.Command{Use: "create <doc_id>", Short: "Create a document comment", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := client(g)
 		if err != nil {
 			return err
@@ -787,7 +804,7 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 	create.Flags().StringVar(&prefix, "prefix", "", "")
 	create.Flags().StringVar(&suffix, "suffix", "", "")
 	create.Flags().StringVar(&version, "version", "", "")
-	update := &cobra.Command{Use: "update <doc_id> <comment_id>", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	update := &cobra.Command{Use: "update <doc_id> <comment_id>", Short: "Update a document comment", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := client(g)
 		if err != nil {
 			return err

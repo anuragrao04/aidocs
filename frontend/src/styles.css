@@ -238,6 +238,20 @@ textarea {
   font-size: 13px;
   margin-top: 14px;
 }
+.hint b {
+  display: block;
+  margin-top: 6px;
+}
+.notice {
+  background: #ecfdf3;
+  color: #027a48;
+  border: 1px solid #abefc6;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-top: 10px;
+}
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -329,6 +343,23 @@ textarea {
 .comment p {
   margin: 0;
   color: #344054;
+}
+.emptySmall {
+  background: white;
+  border: 1px dashed #cfd5e3;
+  border-radius: 16px;
+  padding: 16px;
+  color: #667085;
+  font-size: 13px;
+}
+.placementBadge {
+  width: max-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #fff3e0;
+  color: #b54708;
+  font-size: 12px;
+  font-weight: 800;
 }
 .comment button {
   background: #eef0ff;

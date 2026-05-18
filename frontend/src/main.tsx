@@ -186,6 +186,7 @@ function UploadCard() {
       api.createDocument(title || file?.name || "Untitled", visibility, file!),
     onSuccess: (r) => {
       q.invalidateQueries({ queryKey: ["documents"] });
+      sessionStorage.setItem("aidocs_notice", "Document created.");
       nav(`/documents/${r.id}`);
     },
   });
@@ -250,7 +251,15 @@ function DocumentPage() {
   const { id = "" } = useParams();
   const [tab, setTab] = useState<"comments" | "versions" | "share">("comments");
   const [selection, setSelection] = useState("");
+  const [notice, setNotice] = useState<string>();
   const [activeComment, setActiveComment] = useState<string>();
+  useEffect(() => {
+    const msg = sessionStorage.getItem("aidocs_notice");
+    if (msg) {
+      setNotice(msg);
+      sessionStorage.removeItem("aidocs_notice");
+    }
+  }, []);
   const doc = useQuery({
     queryKey: ["document", id],
     queryFn: () => api.getDocument(id),
@@ -273,8 +282,11 @@ function DocumentPage() {
         <h1>{docTitle(doc.data!)}</h1>
         <p className="muted">{id}</p>
         <div className="hint">
-          Select text inside the render to start a pinned comment.
+          Select text inside the render to start a pinned comment. You can also
+          paste exact text below.
+          {selection && <b> Selected: “{selection}”</b>}
         </div>
+        {notice && <div className="notice">{notice}</div>}
         <div className="tabs">
           <button
             className={tab === "comments" ? "active" : ""}
@@ -304,9 +316,12 @@ function DocumentPage() {
             version={selected}
             selectedText={selection}
             onHover={setActiveComment}
+            onNotice={setNotice}
           />
         )}
-        {tab === "versions" && <Versions doc={id} current={selected} />}
+        {tab === "versions" && (
+          <Versions doc={id} current={selected} onNotice={setNotice} />
+        )}
         {tab === "share" && <Share doc={id} />}
       </aside>
       <section className="canvas">
@@ -408,11 +423,13 @@ function Comments({
   version,
   selectedText,
   onHover,
+  onNotice,
 }: {
   doc: string;
   version: string;
   selectedText: string;
   onHover: (id?: string) => void;
+  onNotice: (message: string) => void;
 }) {
   const q = useQueryClient();
   const [quote, setQuote] = useState("");
@@ -421,16 +438,17 @@ function Comments({
     if (selectedText) setQuote(selectedText);
   }, [selectedText]);
   const comments = useQuery({
-    queryKey: ["comments", doc, version],
-    queryFn: () => api.listComments(doc, version),
-    enabled: !!version,
+    queryKey: ["comments", doc, "all"],
+    queryFn: () => api.listComments(doc),
+    enabled: !!doc,
   });
   const create = useMutation({
     mutationFn: () => api.createComment(doc, version, body, quote),
     onSuccess: () => {
       setBody("");
       setQuote("");
-      q.invalidateQueries({ queryKey: ["comments", doc, version] });
+      onNotice("Comment added.");
+      q.invalidateQueries({ queryKey: ["comments", doc] });
     },
   });
   return (
@@ -462,6 +480,11 @@ function Comments({
         {create.error && <ErrorText err={create.error} />}
       </form>
       <div className="commentList">
+        {comments.data?.items?.length === 0 && (
+          <div className="emptySmall">
+            No comments yet. Select or paste text to start a review thread.
+          </div>
+        )}
         {comments.data?.items?.map((c) => (
           <CommentCard
             key={c.id}
@@ -489,8 +512,7 @@ function CommentCard({
   const q = useQueryClient();
   const m = useMutation({
     mutationFn: (status: string) => api.patchComment(doc, c.id, c.body, status),
-    onSuccess: () =>
-      q.invalidateQueries({ queryKey: ["comments", doc, version] }),
+    onSuccess: () => q.invalidateQueries({ queryKey: ["comments", doc] }),
   });
   return (
     <article
@@ -502,6 +524,10 @@ function CommentCard({
         <b>{c.author.name || c.author.email || c.author.id}</b>
         <span>{c.status}</span>
       </div>
+      {c.current_placement?.status &&
+        c.current_placement.status !== "attached" && (
+          <div className="placementBadge">{c.current_placement.status}</div>
+        )}
       <blockquote>{c.selected_text}</blockquote>
       <p>{c.body}</p>
       <button
@@ -513,7 +539,15 @@ function CommentCard({
   );
 }
 
-function Versions({ doc, current }: { doc: string; current: string }) {
+function Versions({
+  doc,
+  current,
+  onNotice,
+}: {
+  doc: string;
+  current: string;
+  onNotice: (message: string) => void;
+}) {
   const q = useQueryClient();
   const versions = useQuery({
     queryKey: ["versions", doc],
@@ -526,8 +560,10 @@ function Versions({ doc, current }: { doc: string; current: string }) {
     onSuccess: () => {
       setSummary("");
       setFile(null);
+      onNotice("Version uploaded.");
       q.invalidateQueries({ queryKey: ["versions", doc] });
       q.invalidateQueries({ queryKey: ["document", doc] });
+      q.invalidateQueries({ queryKey: ["comments", doc] });
     },
   });
   return (

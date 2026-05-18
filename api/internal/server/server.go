@@ -569,7 +569,7 @@ func (h handlers) createComment(c *gin.Context) {
 		internal(c)
 		return
 	}
-	c.JSON(http.StatusCreated, commentJSON(cm))
+	c.JSON(http.StatusCreated, commentJSON(cm, cm.VersionID, nil))
 }
 
 // CreateRenderToken godoc
@@ -1061,12 +1061,24 @@ func (h handlers) listComments(c *gin.Context) {
 	if !h.needDocRole(c, c.Param("id"), repo.RoleViewer) {
 		return
 	}
-	items, err := h.deps.repository.ListComments(c.Request.Context(), c.Param("id"), c.Query("status"), c.Query("version_id"))
+	versionID := c.Query("version_id")
+	items, err := h.deps.repository.ListComments(c.Request.Context(), c.Param("id"), c.Query("status"), versionID)
 	if err != nil {
 		internal(c)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": commentsJSON(items)})
+	placementVersionID := versionID
+	if placementVersionID == "" {
+		d, err := h.deps.repository.GetDocument(c.Request.Context(), c.Param("id"))
+		if err == nil {
+			placementVersionID = d.CurrentVersionID
+		}
+	}
+	var placementHTML []byte
+	if placementVersionID != "" {
+		placementHTML, _ = h.deps.repository.GetVersionHTML(c.Request.Context(), placementVersionID)
+	}
+	c.JSON(http.StatusOK, gin.H{"items": commentsJSON(items, placementVersionID, placementHTML)})
 }
 
 // PatchComment godoc
@@ -1093,7 +1105,7 @@ func (h handlers) patchComment(c *gin.Context) {
 		internal(c)
 		return
 	}
-	c.JSON(http.StatusOK, commentJSON(cm))
+	c.JSON(http.StatusOK, commentJSON(cm, cm.VersionID, nil))
 }
 
 // DeleteComment godoc
@@ -1240,10 +1252,10 @@ func emailDomainAllowed(email string, allowed []string) bool {
 	}
 	return false
 }
-func commentsJSON(items []repo.Comment) []gin.H {
+func commentsJSON(items []repo.Comment, placementVersionID string, placementHTML []byte) []gin.H {
 	out := make([]gin.H, 0, len(items))
 	for _, cm := range items {
-		out = append(out, commentJSON(cm))
+		out = append(out, commentJSON(cm, placementVersionID, placementHTML))
 	}
 	return out
 }
@@ -1293,7 +1305,18 @@ func principalJSON(p auth.Principal) gin.H {
 	return out
 }
 
-func commentJSON(cm repo.Comment) gin.H {
+func commentJSON(cm repo.Comment, placementVersionID string, placementHTML []byte) gin.H {
+	if placementVersionID == "" {
+		placementVersionID = cm.VersionID
+	}
+	placementStatus := "attached"
+	confidence := 1.0
+	matched := cm.SelectedText
+	if placementVersionID != cm.VersionID && len(placementHTML) > 0 && !strings.Contains(string(placementHTML), cm.SelectedText) {
+		placementStatus = "orphaned"
+		confidence = 0
+		matched = ""
+	}
 	return gin.H{
 		"id":                    cm.ID,
 		"author":                principalJSON(cm.Author),
@@ -1303,11 +1326,11 @@ func commentJSON(cm repo.Comment) gin.H {
 		"status":                cm.Status,
 		"created_on_version_id": cm.VersionID,
 		"current_placement": gin.H{
-			"version_id":   cm.VersionID,
-			"status":       "attached",
+			"version_id":   placementVersionID,
+			"status":       placementStatus,
 			"anchor":       cm.Anchor,
-			"matched_text": cm.SelectedText,
-			"confidence":   1.0,
+			"matched_text": matched,
+			"confidence":   confidence,
 		},
 	}
 }
