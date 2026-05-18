@@ -22,7 +22,7 @@ builds:
 
 archives:
   - id: aidocs
-    builds:
+    ids:
       - aidocs
     name_template: >-
       {{ .ProjectName }}_
@@ -48,6 +48,8 @@ brews:
     repository:
       owner: anuragrao04
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
     install: |
       bin.install "aidocs"
     test: |
