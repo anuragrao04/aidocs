@@ -5,7 +5,8 @@ WORKDIR /src/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend ./
-RUN npm run build
+# Build the static frontend bundle for embedding into the Go server image.
+RUN npx tsc -b && npx vite build
 
 FROM golang:1.26-alpine AS builder
 WORKDIR /src
