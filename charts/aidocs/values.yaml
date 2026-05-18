@@ -1,0 +1,138 @@
+# aidocs Helm values
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/anuragrao/aidocs
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+containerPort: 8080
+
+# Public origins. In production, prefer a separate render origin to isolate
+# untrusted uploaded HTML from the authenticated application.
+origins:
+  app: https://aidocs.example.com
+  render: https://render.aidocs.example.com
+
+# Google OAuth web client. Configure the callback URL in Google Cloud as:
+#   https://aidocs.example.com/v1/auth/google/callback
+googleOAuth:
+  clientID: ""
+  clientSecret: ""
+  existingSecret: ""
+  clientIDKey: google-oauth-client-id
+  clientSecretKey: google-oauth-client-secret
+
+# Session secret must be at least 32 bytes.
+session:
+  secret: ""
+  existingSecret: ""
+  secretKey: session-secret
+
+# Postgres connection string.
+database:
+  url: ""
+  existingSecret: ""
+  urlKey: database-url
+  migrate: true
+
+# S3-compatible blob storage for immutable HTML versions.
+blob:
+  bucket: ""
+  region: us-east-1
+  endpoint: ""
+  forcePathStyle: false
+  accessKeyID: ""
+  secretAccessKey: ""
+  existingSecret: ""
+  accessKeyIDKey: blob-access-key-id
+  secretAccessKeyKey: blob-secret-access-key
+
+# Optional comma-separated domain allowlist for Google OAuth login.
+allowedOAuthDomains: ""
+
+# Optional runtime revision surfaced at /commit.txt.
+commitSha: ""
+
+extraEnv: []
+# - name: FOO
+#   value: bar
+
+extraEnvFrom: []
+# - secretRef:
+#     name: aidocs-extra
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+
+livenessProbe:
+  httpGet:
+    path: /commit.txt
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /openapi.json
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: aidocs.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: aidocs-tls
+  #   hosts:
+  #     - aidocs.example.com
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1

@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aidocs.fullname" . }}
+  labels:
+    {{- include "aidocs.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aidocs.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "aidocs.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "aidocs.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: aidocs
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+          env:
+            - name: AIDOCS_ADDR
+              value: ":{{ .Values.containerPort }}"
+            - name: APP_ORIGIN
+              value: {{ required "origins.app is required" .Values.origins.app | quote }}
+            - name: RENDER_ORIGIN
+              value: {{ required "origins.render is required" .Values.origins.render | quote }}
+            - name: AIDOCS_MIGRATE
+              value: {{ ternary "true" "false" .Values.database.migrate | quote }}
+            - name: BLOB_BUCKET
+              value: {{ required "blob.bucket is required" .Values.blob.bucket | quote }}
+            - name: BLOB_REGION
+              value: {{ .Values.blob.region | quote }}
+            {{- if .Values.blob.endpoint }}
+            - name: BLOB_ENDPOINT
+              value: {{ .Values.blob.endpoint | quote }}
+            {{- end }}
+            - name: BLOB_FORCE_PATH_STYLE
+              value: {{ ternary "true" "false" .Values.blob.forcePathStyle | quote }}
+            {{- if .Values.allowedOAuthDomains }}
+            - name: ALLOWED_OAUTH_DOMAINS
+              value: {{ .Values.allowedOAuthDomains | quote }}
+            {{- end }}
+            {{- if .Values.commitSha }}
+            - name: AIDOCS_COMMIT_SHA
+              value: {{ .Values.commitSha | quote }}
+            {{- end }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "aidocs.secretName" .) .Values.database.existingSecret }}
+                  key: {{ .Values.database.urlKey }}
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "aidocs.secretName" .) .Values.googleOAuth.existingSecret }}
+                  key: {{ .Values.googleOAuth.clientIDKey }}
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "aidocs.secretName" .) .Values.googleOAuth.existingSecret }}
+                  key: {{ .Values.googleOAuth.clientSecretKey }}
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "aidocs.secretName" .) .Values.session.existingSecret }}
+                  key: {{ .Values.session.secretKey }}
+            {{- if or .Values.blob.existingSecret .Values.blob.accessKeyID }}
+            - name: BLOB_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "aidocs.secretName" .) .Values.blob.existingSecret }}
+                  key: {{ .Values.blob.accessKeyIDKey }}
+            {{- end }}
+            {{- if or .Values.blob.existingSecret .Values.blob.secretAccessKey }}
+            - name: BLOB_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "aidocs.secretName" .) .Values.blob.existingSecret }}
+                  key: {{ .Values.blob.secretAccessKeyKey }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

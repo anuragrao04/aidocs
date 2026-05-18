@@ -1,24 +1,43 @@
 # aidocs
 
-Review AI-generated HTML documents with a Google-Docs-like workflow.
+Give your agents the power to publish beautiful, reviewable documents.
 
-`aidocs` lets agents and humans create, host, version, comment on, and share single-file HTML documents. It includes a Go API server, an embedded React review UI, and a Go CLI for agent/headless workflows.
+`aidocs` is a Google-Docs-like review layer for AI-generated HTML artifacts. Agents create rich, self-contained HTML reports, specs, dashboards, diagrams, and decision docs; humans review them in the browser with comments, versions, and sharing.
 
-## Why aidocs?
+Instead of pasting giant reports into chat, let agents push a document, iterate on feedback, and keep a durable review trail.
 
-AI agents are good at producing rich HTML reports, specs, dashboards, and design docs. Reviewing those artifacts through chat is painful. `aidocs` turns each generated HTML file into a reviewable document with immutable versions, anchored comments, sharing, and CLI automation.
+## What you can build with it
+
+- Agent-generated architecture reviews
+- Incident reports and postmortems
+- Product specs and launch plans
+- Data analysis reports
+- Design proposals with Mermaid/SVG diagrams
+- QA findings and browser-test reports
+- Internal dashboards captured as portable HTML
 
 ## Features
 
-- Single self-contained HTML document per artifact
+- One self-contained HTML file per document
 - Browser review UI with sandboxed rendering
 - Anchored comments and resolve/reopen workflow
 - Immutable versions with optimistic concurrency
 - Google OAuth for human users
-- Native service accounts for headless/agent use
+- Native service accounts for headless/agent workflows
 - Go CLI with compact default output and JSON mode
 - Generated OpenAPI/Swagger docs
-- Self-hostable API server with embedded frontend
+- Self-hostable Go server with embedded React frontend
+- Dockerfile for container deployments
+
+## Why one HTML file?
+
+A single HTML artifact is easy for agents to generate, easy to version, easy to archive, and easy to move through a CLI. Images can be embedded with base64 data URLs, and diagrams can be Mermaid, inline SVG, or rendered HTML/CSS.
+
+```html
+<img src="data:image/png;base64,..." alt="embedded screenshot" />
+```
+
+No separate image hosting is required for v1.
 
 ## Install from source
 
@@ -35,47 +54,30 @@ bin/aidocs-server
 bin/aidocs
 ```
 
-## Run locally
+## Run with Docker
 
-You need PostgreSQL and an S3-compatible blob store, or configure the server for your deployment environment.
-
-Common environment variables:
+Build the application container:
 
 ```bash
-export DATABASE_URL='postgres://user:pass@localhost:5432/aidocs?sslmode=disable'
-export BLOB_BUCKET='aidocs'
-export BLOB_REGION='us-east-1'
-export APP_ORIGIN='http://localhost:8080'
-export RENDER_ORIGIN='http://localhost:8080'
-export GOOGLE_OAUTH_CLIENT_ID='...'
-export GOOGLE_OAUTH_CLIENT_SECRET='...'
-export SESSION_SECRET='change-me'
+docker build -t aidocs:local .
 ```
 
-Then run:
+Run it with Postgres, S3-compatible storage, and Google OAuth configured:
 
 ```bash
-./bin/aidocs-server
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL='postgres://user:pass@host.docker.internal:5432/aidocs?sslmode=disable' \
+  -e BLOB_BUCKET='aidocs' \
+  -e BLOB_REGION='us-east-1' \
+  -e APP_ORIGIN='http://localhost:8080' \
+  -e RENDER_ORIGIN='http://localhost:8080' \
+  -e GOOGLE_OAUTH_CLIENT_ID='your-client-id' \
+  -e GOOGLE_OAUTH_CLIENT_SECRET='your-client-secret' \
+  -e SESSION_SECRET='replace-with-at-least-32-random-bytes' \
+  aidocs:local
 ```
 
-Open:
-
-```text
-http://localhost:8080
-```
-
-API docs:
-
-```text
-http://localhost:8080/api-docs
-http://localhost:8080/openapi.json
-```
-
-Runtime commit endpoint:
-
-```text
-http://localhost:8080/commit.txt
-```
+See [Self-hosting](docs/self-hosting.md) for production setup and all environment variables. A Kubernetes Helm chart is available in [`charts/aidocs`](charts/aidocs).
 
 ## CLI quickstart
 
@@ -124,11 +126,22 @@ make swagger        regenerate OpenAPI docs
 api/       Go API server and embedded frontend assets
 cli/       Go CLI
 frontend/  React + Vite frontend
+docs/      Self-hosting and operator docs
+```
+
+## API docs
+
+When the server is running:
+
+```text
+/openapi.json
+/api-docs
+/commit.txt
 ```
 
 ## Security model
 
-Uploaded HTML is rendered in a sandboxed review frame. Treat uploaded documents as untrusted content and deploy with separate app/render origins for stronger isolation in production.
+Uploaded HTML should be treated as untrusted content. `aidocs` renders documents in a sandboxed frame. For production, deploy with separate app and render origins when possible.
 
 ## License
 
