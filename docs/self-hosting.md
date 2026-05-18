@@ -121,13 +121,13 @@ Then set `origins`, `database`, `blob`, `googleOAuth`, `session`, and `ingress`.
 Once releases are published, install the CLI with Homebrew:
 
 ```bash
-brew install anuragrao/tap/aidocs
+brew install anuragrao04/tap/aidocs
 ```
 
 Until then, build locally:
 
 ```bash
-git clone https://github.com/anuragrao/aidocs.git
+git clone https://github.com/anuragrao04/aidocs.git
 cd aidocs
 make build-cli
 ./bin/aidocs auth login https://aidocs.example.com

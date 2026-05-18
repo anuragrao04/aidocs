@@ -42,11 +42,11 @@ snapshot:
 
 brews:
   - name: aidocs
-    homepage: https://github.com/anuragrao/aidocs
-    description: CLI for aidocs HTML document review
+    homepage: https://github.com/anuragrao04/aidocs
+    description: Give your agents the power to publish reviewable HTML documents
     license: Apache-2.0
     repository:
-      owner: anuragrao
+      owner: anuragrao04
       name: homebrew-tap
     install: |
       bin.install "aidocs"

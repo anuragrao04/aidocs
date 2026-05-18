@@ -4,9 +4,9 @@ description: Give your agents the power to publish reviewable HTML documents.
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/anuragrao/aidocs
+home: https://github.com/anuragrao04/aidocs
 sources:
-  - https://github.com/anuragrao/aidocs
+  - https://github.com/anuragrao04/aidocs
 maintainers:
   - name: aidocs maintainers
 keywords:

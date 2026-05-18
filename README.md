@@ -42,7 +42,7 @@ No separate image hosting is required for v1.
 ## Install from source
 
 ```bash
-git clone https://github.com/anuragrao/aidocs.git
+git clone https://github.com/anuragrao04/aidocs.git
 cd aidocs
 make build
 ```

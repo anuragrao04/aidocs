@@ -15,7 +15,7 @@ helm upgrade --install aidocs ./charts/aidocs \
 
 ```yaml
 image:
-  repository: ghcr.io/anuragrao/aidocs
+  repository: ghcr.io/anuragrao04/aidocs
   tag: "0.1.0"
 
 origins:

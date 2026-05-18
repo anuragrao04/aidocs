@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/anuragrao/aidocs
+  repository: ghcr.io/anuragrao04/aidocs
   tag: ""
   pullPolicy: IfNotPresent
 
