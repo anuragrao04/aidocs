@@ -1,0 +1,863 @@
+basePath: /
+definitions:
+  auth.Principal:
+    properties:
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      pictureURL:
+        type: string
+      type:
+        $ref: '#/definitions/auth.PrincipalType'
+    type: object
+  auth.PrincipalType:
+    enum:
+    - user
+    - service_account
+    type: string
+    x-enum-varnames:
+    - PrincipalUser
+    - PrincipalServiceAccount
+  repo.Document:
+    properties:
+      currentVersionID:
+        type: string
+      id:
+        type: string
+      owner:
+        $ref: '#/definitions/auth.Principal'
+      title:
+        type: string
+      visibility:
+        type: string
+    type: object
+  repo.Grant:
+    properties:
+      documentID:
+        type: string
+      grantedBy:
+        $ref: '#/definitions/auth.Principal'
+      id:
+        type: string
+      principal:
+        $ref: '#/definitions/auth.Principal'
+      role:
+        $ref: '#/definitions/repo.Role'
+    type: object
+  repo.OwnershipTransfer:
+    properties:
+      from_user_id:
+        type: string
+      id:
+        type: string
+      service_account_id:
+        type: string
+      status:
+        type: string
+      to_user_id:
+        type: string
+    type: object
+  repo.Role:
+    enum:
+    - viewer
+    - commenter
+    - editor
+    - owner
+    type: string
+    x-enum-varnames:
+    - RoleViewer
+    - RoleCommenter
+    - RoleEditor
+    - RoleOwner
+  repo.ServiceAccount:
+    properties:
+      disabled:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      owner:
+        $ref: '#/definitions/auth.Principal'
+    type: object
+  repo.Version:
+    properties:
+      changeSummary:
+        type: string
+      createdBy:
+        $ref: '#/definitions/auth.Principal'
+      documentID:
+        type: string
+      id:
+        type: string
+      number:
+        type: integer
+      sha256:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: This API powers a review tool where people can upload one self-contained
+    HTML file, view it, and leave comments anchored to specific text ranges inside
+    that HTML.
+  title: aidocs API
+  version: v1
+paths:
+  /.well-known/aidocs.json:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Deployment discovery
+      tags:
+      - discovery
+  /commit.txt:
+    get:
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Build commit SHA
+      tags:
+      - discovery
+  /v/{version_id}:
+    get:
+      parameters:
+      - description: Version ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      - description: Render token
+        in: query
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Render version wrapper
+      tags:
+      - render
+  /v1/auth/cli/credentials:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List CLI credentials
+      tags:
+      - auth
+  /v1/auth/cli/credentials/{id}:
+    delete:
+      parameters:
+      - description: Credential ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Revoke CLI credential
+      tags:
+      - auth
+  /v1/auth/cli/exchange:
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Exchange CLI login code
+      tags:
+      - auth
+  /v1/auth/google/callback:
+    get:
+      parameters:
+      - description: OAuth code
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: OAuth state
+        in: query
+        name: state
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Found
+      summary: Google OAuth callback
+      tags:
+      - auth
+  /v1/auth/google/start:
+    get:
+      parameters:
+      - description: web or cli
+        in: query
+        name: mode
+        type: string
+      - description: web redirect
+        in: query
+        name: redirect
+        type: string
+      - description: CLI loopback redirect
+        in: query
+        name: cli_redirect
+        type: string
+      - description: PKCE challenge
+        in: query
+        name: code_challenge
+        type: string
+      - description: OAuth state
+        in: query
+        name: state
+        type: string
+      responses:
+        "302":
+          description: Found
+      summary: Start Google OAuth
+      tags:
+      - auth
+  /v1/documents:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List documents
+      tags:
+      - documents
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Document title
+        in: formData
+        name: title
+        required: true
+        type: string
+      - description: private|org|link
+        in: formData
+        name: visibility
+        type: string
+      - description: Single-file HTML
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create document
+      tags:
+      - documents
+  /v1/documents/{doc_id}/comments/{comment_id}:
+    delete:
+      parameters:
+      - description: Document ID
+        in: path
+        name: doc_id
+        required: true
+        type: string
+      - description: Comment ID
+        in: path
+        name: comment_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Delete comment
+      tags:
+      - comments
+    patch:
+      parameters:
+      - description: Document ID
+        in: path
+        name: doc_id
+        required: true
+        type: string
+      - description: Comment ID
+        in: path
+        name: comment_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Update comment
+      tags:
+      - comments
+  /v1/documents/{id}:
+    delete:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Delete document
+      tags:
+      - documents
+    get:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.Document'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Get document
+      tags:
+      - documents
+    patch:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.Document'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Update document
+      tags:
+      - documents
+  /v1/documents/{id}/comments:
+    get:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: open|resolved|stale|orphaned|all
+        in: query
+        name: status
+        type: string
+      - description: Version ID
+        in: query
+        name: version_id
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List comments
+      tags:
+      - comments
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create comment
+      tags:
+      - comments
+  /v1/documents/{id}/grants:
+    get:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List document grants
+      tags:
+      - grants
+    post:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create document grant
+      tags:
+      - grants
+  /v1/documents/{id}/grants/{grant_id}:
+    delete:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Grant ID
+        in: path
+        name: grant_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Delete document grant
+      tags:
+      - grants
+    patch:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Grant ID
+        in: path
+        name: grant_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.Grant'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Update document grant
+      tags:
+      - grants
+  /v1/documents/{id}/versions:
+    get:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List versions
+      tags:
+      - versions
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Base version ID
+        in: formData
+        name: base_version_id
+        required: true
+        type: string
+      - description: Change summary
+        in: formData
+        name: change_summary
+        type: string
+      - description: HTML file
+        in: formData
+        name: file
+        required: true
+        type: file
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create version
+      tags:
+      - versions
+  /v1/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Current principal
+      tags:
+      - auth
+  /v1/service-accounts:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List service accounts
+      tags:
+      - service-accounts
+    post:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create service account
+      tags:
+      - service-accounts
+  /v1/service-accounts/{id}:
+    patch:
+      parameters:
+      - description: Service account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.ServiceAccount'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Update service account
+      tags:
+      - service-accounts
+  /v1/service-accounts/{id}/keys:
+    get:
+      parameters:
+      - description: Service account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List service account keys
+      tags:
+      - service-accounts
+    post:
+      parameters:
+      - description: Service account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create service account key
+      tags:
+      - service-accounts
+  /v1/service-accounts/{id}/keys/{key_id}:
+    delete:
+      parameters:
+      - description: Service account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Key ID
+        in: path
+        name: key_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Revoke service account key
+      tags:
+      - service-accounts
+  /v1/service-accounts/{id}/transfer:
+    post:
+      parameters:
+      - description: Service account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/repo.OwnershipTransfer'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Initiate service account ownership transfer
+      tags:
+      - service-accounts
+  /v1/service-accounts/transfers:
+    get:
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: List service account ownership transfers
+      tags:
+      - service-accounts
+  /v1/service-accounts/transfers/{id}/accept:
+    post:
+      parameters:
+      - description: Transfer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.OwnershipTransfer'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Accept ownership transfer
+      tags:
+      - service-accounts
+  /v1/service-accounts/transfers/{id}/decline:
+    post:
+      parameters:
+      - description: Transfer ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Decline ownership transfer
+      tags:
+      - service-accounts
+  /v1/versions/{id}:
+    get:
+      parameters:
+      - description: Version ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.Version'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Get version metadata
+      tags:
+      - versions
+  /v1/versions/{id}/html:
+    get:
+      parameters:
+      - description: Version ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Get version HTML
+      tags:
+      - versions
+  /v1/versions/{id}/render-token:
+    post:
+      parameters:
+      - description: Version ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create render token
+      tags:
+      - versions
+securityDefinitions:
+  bearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+  cookieAuth:
+    in: cookie
+    name: aidocs_session
+    type: apiKey
+swagger: "2.0"

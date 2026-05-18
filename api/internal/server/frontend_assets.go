@@ -1,0 +1,57 @@
+package server
+
+import (
+	"embed"
+	"io/fs"
+	"net/http"
+	"path/filepath"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+)
+
+// frontendFS contains the Vite production build. The placeholder index.html
+// keeps the server buildable until the real frontend build is wired into CI.
+//
+//go:embed frontend_dist/*
+var frontendFS embed.FS
+
+func registerFrontendRoutes(r *gin.Engine) {
+	dist, err := fs.Sub(frontendFS, "frontend_dist")
+	if err != nil {
+		return
+	}
+	fileServer := http.FileServer(http.FS(dist))
+
+	r.GET("/assets/*filepath", gin.WrapH(http.StripPrefix("/assets/", http.FileServer(http.FS(mustSubOrSelf(dist, "assets"))))))
+	r.NoRoute(func(c *gin.Context) {
+		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		path := strings.TrimPrefix(filepath.Clean(c.Request.URL.Path), "/")
+		if path != "." && path != "" && fileExists(dist, path) {
+			fileServer.ServeHTTP(c.Writer, c.Request)
+			return
+		}
+		index, err := fs.ReadFile(dist, "index.html")
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", index)
+	})
+}
+
+func mustSubOrSelf(fsys fs.FS, dir string) fs.FS {
+	sub, err := fs.Sub(fsys, dir)
+	if err != nil {
+		return fsys
+	}
+	return sub
+}
+
+func fileExists(fsys fs.FS, name string) bool {
+	info, err := fs.Stat(fsys, name)
+	return err == nil && !info.IsDir()
+}
