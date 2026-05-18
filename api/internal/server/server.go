@@ -62,6 +62,7 @@ func New(cfg Config, opts ...Option) *Server {
 		}))
 	}
 	r.Use(gin.Recovery())
+	r.Use(prometheusMiddleware())
 	s := &Server{engine: r}
 	s.routes(deps)
 	return s
@@ -71,6 +72,7 @@ func (s *Server) Run(addr string) error { return s.engine.Run(addr) }
 
 func (s *Server) routes(deps dependencies) {
 	h := handlers{deps: deps}
+	s.engine.GET("/metrics", metricsHandler())
 	s.engine.GET("/.well-known/aidocs.json", h.discovery)
 	s.engine.GET("/commit.txt", h.commitTXT)
 	registerAPIDocsRoutes(s.engine)
@@ -174,10 +176,12 @@ func (h handlers) googleCallback(c *gin.Context) {
 	}
 	gu, err := h.deps.googleOAuth.ExchangeAndVerify(c.Request.Context(), c.Query("code"))
 	if err != nil {
+		incAuth("google", "failure")
 		c.JSON(http.StatusUnauthorized, errorResponse("unauthorized", "google oauth failed", nil))
 		return
 	}
 	if !emailDomainAllowed(gu.Email, h.deps.allowedOAuthDomains) {
+		incAuth("google", "forbidden_domain")
 		c.JSON(http.StatusForbidden, errorResponse("forbidden", "google account domain is not allowed", nil))
 		return
 	}
@@ -207,6 +211,7 @@ func (h handlers) googleCallback(c *gin.Context) {
 		c.Redirect(http.StatusFound, u.String())
 		return
 	}
+	incAuth("google", "success")
 	h.setSessionCookie(c, p)
 	redir := st.Redirect
 	if redir == "" {
@@ -235,6 +240,7 @@ func (h handlers) cliExchange(c *gin.Context) {
 	}
 	st, ok := h.deps.stateStore.TakeCode(in.Code)
 	if !ok || !auth.VerifyPKCES256(in.CodeVerifier, st.CodeChallenge) {
+		incAuth("cli_exchange", "failure")
 		c.JSON(http.StatusUnauthorized, errorResponse("unauthorized", "invalid cli code", nil))
 		return
 	}
@@ -252,6 +258,7 @@ func (h handlers) cliExchange(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incAuth("cli_exchange", "success")
 	c.JSON(http.StatusOK, gin.H{"id": id, "token": token, "principal": gin.H{"type": "user", "id": st.UserID, "email": st.GoogleUser.Email}})
 }
 
@@ -386,6 +393,7 @@ func (h handlers) createDocument(c *gin.Context) {
 		badRequest(c, "invalid document upload")
 		return
 	}
+	observeHTML("document_create", len(html))
 	d, _, err := h.deps.repository.CreateDocument(c.Request.Context(), *p, title, vis, html)
 	if err != nil {
 		if isBlobStorageError(err) {
@@ -395,6 +403,8 @@ func (h handlers) createDocument(c *gin.Context) {
 		internalErr(c, err)
 		return
 	}
+	incDocument("created", d.Visibility, actorType(c))
+	incVersion("created_initial", actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": d.ID, "current_version_id": d.CurrentVersionID})
 }
 
@@ -425,6 +435,7 @@ func (h handlers) createServiceAccount(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incServiceAccount("created", actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": sa.ID, "name": sa.Name, "owner": gin.H{"id": sa.Owner.ID, "email": sa.Owner.Email}, "disabled": sa.Disabled, "grants": []any{}})
 }
 
@@ -492,6 +503,7 @@ func (h handlers) createGrant(c *gin.Context) {
 	if g.Principal.Email != "" {
 		pr["email"] = g.Principal.Email
 	}
+	incGrant("created", string(g.Role), string(g.Principal.Type), actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": g.ID, "resource": gin.H{"type": "document", "id": g.DocumentID}, "principal": pr, "role": g.Role, "granted_by": gin.H{"id": g.GrantedBy.ID, "email": g.GrantedBy.Email}})
 }
 
@@ -523,6 +535,7 @@ func (h handlers) createVersion(c *gin.Context) {
 		badRequest(c, "file is required")
 		return
 	}
+	observeHTML("version_create", len(html))
 	v, err := h.deps.repository.CreateVersion(c.Request.Context(), c.Param("id"), c.PostForm("base_version_id"), c.PostForm("change_summary"), html, *p)
 	if err != nil {
 		if err.Error() == "version_conflict" {
@@ -532,6 +545,7 @@ func (h handlers) createVersion(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incVersion("created", actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": v.ID, "number": v.Number, "sha256": v.SHA256})
 }
 
@@ -569,6 +583,7 @@ func (h handlers) createComment(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incComment("created", cm.Status, actorType(c))
 	c.JSON(http.StatusCreated, commentJSON(cm, cm.VersionID, nil))
 }
 
@@ -594,6 +609,7 @@ func (h handlers) createRenderToken(c *gin.Context) {
 	if h.deps.renderOrigin != "" {
 		path = strings.TrimRight(h.deps.renderOrigin, "/") + path
 	}
+	incRender("token_created", "success")
 	c.JSON(http.StatusOK, gin.H{"token": token, "url": path})
 }
 
@@ -618,6 +634,7 @@ func (h handlers) renderVersion(c *gin.Context) {
 	}
 	b, err := h.deps.repository.GetVersionHTML(c.Request.Context(), vid)
 	if err != nil {
+		incRender("rendered", "not_found")
 		notFound(c)
 		return
 	}
@@ -627,6 +644,8 @@ func (h handlers) renderVersion(c *gin.Context) {
 	}
 	c.Header("Content-Security-Policy", "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors "+appOrigin)
 	c.Header("X-Content-Type-Options", "nosniff")
+	observeHTML("render", len(b))
+	incRender("rendered", "success")
 	c.Data(http.StatusOK, "text/html; charset=utf-8", renderWrapperHTML(b, appOrigin))
 }
 
@@ -862,6 +881,7 @@ func (h handlers) createServiceAccountKey(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incServiceAccount("key_created", actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": id, "token": token})
 }
 
@@ -902,6 +922,7 @@ func (h handlers) revokeServiceAccountKey(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incServiceAccount("key_revoked", actorType(c))
 	c.Status(http.StatusNoContent)
 }
 
@@ -954,6 +975,7 @@ func (h handlers) patchGrant(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incGrant("updated", string(g.Role), string(g.Principal.Type), actorType(c))
 	c.JSON(http.StatusOK, g)
 }
 
@@ -978,6 +1000,7 @@ func (h handlers) deleteGrant(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incGrant("deleted", "unknown", "unknown", actorType(c))
 	c.Status(http.StatusNoContent)
 }
 
@@ -1044,6 +1067,8 @@ func (h handlers) getVersionHTML(c *gin.Context) {
 		internal(c)
 		return
 	}
+	observeHTML("version_download", len(b))
+	incVersion("html_downloaded", actorType(c))
 	c.Data(http.StatusOK, "text/html; charset=utf-8", b)
 }
 
@@ -1105,6 +1130,13 @@ func (h handlers) patchComment(c *gin.Context) {
 		internal(c)
 		return
 	}
+	event := "updated"
+	if in.Status == "resolved" {
+		event = "resolved"
+	} else if in.Status == "open" {
+		event = "reopened"
+	}
+	incComment(event, cm.Status, actorType(c))
 	c.JSON(http.StatusOK, commentJSON(cm, cm.VersionID, nil))
 }
 
@@ -1125,6 +1157,7 @@ func (h handlers) deleteComment(c *gin.Context) {
 		internal(c)
 		return
 	}
+	incComment("deleted", "unknown", actorType(c))
 	c.Status(http.StatusNoContent)
 }
 func (h handlers) needServiceAccountOwner(c *gin.Context, saID string) bool {
@@ -1177,14 +1210,23 @@ func requireAuth(a auth.Authenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p, err := a.Authenticate(c.Request)
 		if err != nil {
+			incAuth("request", "failure")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, errorResponse("unauthorized", "authentication required", nil))
 			return
 		}
+		incAuth("request", "success")
 		c.Set("principal", p)
 		c.Next()
 	}
 }
-func current(c *gin.Context) *auth.Principal { p, _ := c.Get("principal"); return p.(*auth.Principal) }
+func current(c *gin.Context) *auth.Principal {
+	p, ok := c.Get("principal")
+	if !ok {
+		return nil
+	}
+	principal, _ := p.(*auth.Principal)
+	return principal
+}
 
 var errPayloadTooLarge = errors.New("payload too large")
 

@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,49 @@ func TestDiscovery(t *testing.T) {
 	  "api_version": "v1",
 	  "auth": { "modes": ["web", "cli"] }
 	}`)
+}
+
+func TestMetricsEndpoint(t *testing.T) {
+	h := newTestServer()
+	_ = do(t, h, http.MethodGet, "/v1/me", "", nil)
+	rr := do(t, h, http.MethodGet, "/metrics", "", nil)
+	assertStatus(t, rr, http.StatusOK)
+	body := rr.Body.String()
+	for _, want := range []string{"aidocs_http_requests_total", "aidocs_auth_attempts_total", "go_goroutines"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics response missing %q\n%s", want, body)
+		}
+	}
+}
+
+func TestAuthFailureMetricIncrements(t *testing.T) {
+	h := newTestServer()
+	before := scrapeMetric(t, h, "aidocs_auth_attempts_total", map[string]string{"kind": "request", "outcome": "failure"})
+	_ = do(t, h, http.MethodGet, "/v1/me", "", nil)
+	after := scrapeMetric(t, h, "aidocs_auth_attempts_total", map[string]string{"kind": "request", "outcome": "failure"})
+	if after != before+1 {
+		t.Fatalf("auth failure counter = %v, want %v", after, before+1)
+	}
+}
+
+func TestDocumentCreateMetricsIncrement(t *testing.T) {
+	h := newTestServer()
+	docBefore := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "visibility": "private", "actor_type": "user"})
+	verBefore := scrapeMetric(t, h, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
+	body, contentType := multipartBody(t, map[string]string{"title": "Metrics doc"}, "file", "doc.html", "<html><body>metrics</body></html>")
+	rr := doRaw(t, h, http.MethodPost, "/v1/documents", body, map[string]string{
+		"Content-Type":     contentType,
+		"X-Test-Principal": "user:usr_1:anurag@example.com:Anurag",
+	})
+	assertStatus(t, rr, http.StatusCreated)
+	docAfter := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "visibility": "private", "actor_type": "user"})
+	verAfter := scrapeMetric(t, h, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
+	if docAfter != docBefore+1 {
+		t.Fatalf("document create counter = %v, want %v", docAfter, docBefore+1)
+	}
+	if verAfter != verBefore+1 {
+		t.Fatalf("initial version counter = %v, want %v", verAfter, verBefore+1)
+	}
 }
 
 func TestAPIDocsRoutes(t *testing.T) {
@@ -638,6 +682,50 @@ func multipartBody(t *testing.T, fields map[string]string, fileField, fileName, 
 		t.Fatal(err)
 	}
 	return &b, w.FormDataContentType()
+}
+
+func scrapeMetric(t *testing.T, h http.Handler, name string, labels map[string]string) float64 {
+	t.Helper()
+	rr := do(t, h, http.MethodGet, "/metrics", "", nil)
+	assertStatus(t, rr, http.StatusOK)
+	for _, line := range strings.Split(rr.Body.String(), "\n") {
+		if line == "" || strings.HasPrefix(line, "#") || !strings.HasPrefix(line, name) {
+			continue
+		}
+		metric, value, ok := strings.Cut(line, " ")
+		if !ok || !metricLabelsMatch(metric, name, labels) {
+			continue
+		}
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			t.Fatalf("parse metric %q value %q: %v", name, value, err)
+		}
+		return f
+	}
+	return 0
+}
+
+func metricLabelsMatch(metric, name string, want map[string]string) bool {
+	if metric == name {
+		return len(want) == 0
+	}
+	if !strings.HasPrefix(metric, name+"{") || !strings.HasSuffix(metric, "}") {
+		return false
+	}
+	labels := map[string]string{}
+	for _, part := range strings.Split(strings.TrimSuffix(strings.TrimPrefix(metric, name+"{"), "}"), ",") {
+		k, v, ok := strings.Cut(part, "=")
+		if !ok {
+			return false
+		}
+		labels[k] = strings.Trim(v, "\"")
+	}
+	for k, v := range want {
+		if labels[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 func assertStatus(t *testing.T, rr *httptest.ResponseRecorder, want int) {

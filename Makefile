@@ -1,6 +1,8 @@
 SWAG := go run github.com/swaggo/swag/cmd/swag@v1.16.6
+JSONNET ?= jsonnet
+JB ?= jb
 
-.PHONY: swagger frontend backend cli build build-frontend build-backend build-cli test clean
+.PHONY: swagger frontend backend cli build build-frontend build-backend build-cli dashboards check-dashboards test clean
 
 swagger:
 	$(SWAG) init \
@@ -26,6 +28,12 @@ build-frontend: frontend
 build-backend: backend
 
 build-cli: cli
+
+dashboards:
+	cd monitoring/grafana && $(JB) install && $(JSONNET) -J vendor aidocs-dashboard.libsonnet | python3 -m json.tool > aidocs-dashboard.json
+
+check-dashboards: dashboards
+	git diff --exit-code -- monitoring/grafana/aidocs-dashboard.json
 
 test: swagger frontend
 	go test ./...
