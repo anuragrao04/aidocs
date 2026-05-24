@@ -29,17 +29,6 @@ export function LoginPage() {
             <GoogleIcon /> Continue with Google
           </a>
         </Button>
-        <div className="mt-6 rounded-[12px] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-xs text-[var(--color-fg-muted)]">
-          <div className="mb-1 font-medium text-[var(--color-fg)]">
-            Setting up a headless agent?
-          </div>
-          For things like n8n that can’t run OAuth interactively, sign in
-          here first and mint a key from{" "}
-          <span className="font-mono text-[var(--color-fg)]">
-            Settings → Service accounts
-          </span>
-          .
-        </div>
       </div>
     </div>
   );
