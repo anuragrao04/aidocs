@@ -328,15 +328,19 @@ function NewBotDialog({
   onOpenChange: (v: boolean) => void;
   onCreated: (sa: { id: string; name: string }) => void;
 }) {
-  const [label, setLabel] = useState("");
-  const [customise, setCustomise] = useState(false);
-  const [domain, setDomain] = useState("");
+  const [value, setValue] = useState("");
   const [result, setResult] = useState<{ name: string; token: string } | null>(
     null,
   );
+  const trimmed = value.trim();
+  const at = trimmed.indexOf("@");
+  const label = at >= 0 ? trimmed.slice(0, at) : trimmed;
+  const domain = at >= 0 ? trimmed.slice(at + 1) : "";
+  const hasDomain = at >= 0;
+  const domainLooksValid = !hasDomain || domain.endsWith(".bot");
   const create = useMutation({
     mutationFn: () =>
-      api.createServiceAccount(label, customise && domain ? domain : undefined),
+      api.createServiceAccount(label, hasDomain ? domain : undefined),
     onSuccess: (r) => {
       setResult({ name: r.name, token: r.key.token });
       onCreated({ id: r.id, name: r.name });
@@ -344,9 +348,7 @@ function NewBotDialog({
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   function reset() {
-    setLabel("");
-    setCustomise(false);
-    setDomain("");
+    setValue("");
     setResult(null);
   }
   return (
@@ -379,47 +381,25 @@ function NewBotDialog({
                   Name
                 </label>
                 <Input
-                  placeholder="n8n-prod"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
+                  placeholder="n8n-prod   or   n8n-prod@ops.team.bot"
+                  value={value}
+                  onChange={(e) => setValue(e.target.value)}
                   autoCapitalize="off"
                   autoCorrect="off"
                   spellCheck={false}
                   autoFocus
                 />
                 <p className="mt-1 text-[11px] text-[var(--color-fg-muted)]">
-                  Letters, numbers, and hyphens. We'll mint a memorable address
-                  for it — e.g. n8n-prod@brave.otter.bot.
+                  Letters, numbers, and hyphens. Add{" "}
+                  <code className="font-mono">@something.bot</code> to pick your
+                  bot's address, or skip it and we'll pick one for you.
                 </p>
-              </div>
-
-              {!customise ? (
-                <button
-                  type="button"
-                  onClick={() => setCustomise(true)}
-                  className="text-xs text-[var(--color-accent)] hover:underline"
-                >
-                  Choose a custom address
-                </button>
-              ) : (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-[var(--color-fg-muted)]">
-                    Address
-                  </label>
-                  <Input
-                    placeholder="ops.team.bot"
-                    value={domain}
-                    onChange={(e) => setDomain(e.target.value)}
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                  <p className="mt-1 text-[11px] text-[var(--color-fg-muted)]">
-                    Must end in <code className="font-mono">.bot</code>. Anything
-                    goes before that — pick something memorable.
+                {hasDomain && !domainLooksValid && (
+                  <p className="mt-1 text-[11px] text-[var(--color-danger)]">
+                    Addresses must end in .bot.
                   </p>
-                </div>
-              )}
+                )}
+              </div>
 
               <DialogFooter>
                 <Button
@@ -431,7 +411,7 @@ function NewBotDialog({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!label || create.isPending}
+                  disabled={!label || !domainLooksValid || create.isPending}
                 >
                   Create bot
                 </Button>
