@@ -427,14 +427,12 @@ function NewBotDialog({
               </DialogDescription>
             </DialogHeader>
             <CodeBlock>{result.name}</CodeBlock>
-            <div className="mt-4 mb-1 text-xs font-medium text-[var(--color-fg)]">
-              Bot key
+            <div className="mt-5 rounded-[10px] border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-3">
+              <div className="mb-1 text-sm font-semibold text-[var(--color-warning)]">
+                Copy this key now — you won't see it again.
+              </div>
+              <CodeBlock>{result.token}</CodeBlock>
             </div>
-            <p className="mb-2 text-[11px] text-[var(--color-fg-muted)]">
-              This is the only time you'll see this key. Save it where your
-              automation can read it — not on your own machine.
-            </p>
-            <CodeBlock>{result.token}</CodeBlock>
             <DialogFooter>
               <Button onClick={() => onOpenChange(false)}>Done</Button>
             </DialogFooter>

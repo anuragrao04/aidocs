@@ -929,8 +929,7 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 				return print(out, g, b)
 			}
 			fmt.Fprintf(out, "\u2713 Created %s\n\n", resp.Name)
-			fmt.Fprintln(out, "  This is the only time you'll see this key. Save it where your")
-			fmt.Fprintln(out, "  automation can read it \u2014 not on your own machine.")
+			fmt.Fprintln(out, "  ⚠  Copy this key now \u2014 you won't see it again.")
 			fmt.Fprintln(out)
 			fmt.Fprintf(out, "    %s\n", resp.Key.Token)
 			return nil
