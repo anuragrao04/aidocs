@@ -535,31 +535,17 @@ function ShareSheet({ docId }: { docId: string }) {
     queryKey: ["grants", docId],
     queryFn: () => api.listGrants(docId),
   });
-  const [mode, setMode] = useState<"user" | "service_account">("user");
-  const [email, setEmail] = useState("");
-  const [saName, setSaName] = useState("");
+  const [address, setAddress] = useState("");
   const [role, setRole] = useState("commenter");
   const m = useMutation({
-    mutationFn: () =>
-      api.createGrant(
-        docId,
-        mode === "user"
-          ? { type: "user", id: "", email }
-          : { type: "service_account", id: "", name: saName },
-        role,
-      ),
+    mutationFn: () => api.createGrant(docId, address.trim(), role),
     onSuccess: () => {
-      setEmail("");
-      setSaName("");
+      setAddress("");
       toast.success("Access granted.");
       q.invalidateQueries({ queryKey: ["grants", docId] });
     },
     onError: (e) =>
-      toast.error(
-        e instanceof Error && e.message
-          ? e.message
-          : "No service account with that exact name.",
-      ),
+      toast.error(e instanceof Error ? e.message : "Couldn't share."),
   });
   return (
     <SheetContent>
@@ -574,39 +560,19 @@ function ShareSheet({ docId }: { docId: string }) {
             m.mutate();
           }}
         >
-          <div className="flex gap-1 rounded-md bg-[var(--color-surface-muted)] p-0.5 text-xs">
-            {(["user", "service_account"] as const).map((mm) => (
-              <button
-                key={mm}
-                type="button"
-                onClick={() => setMode(mm)}
-                className={`flex-1 rounded px-2 py-1 transition-colors ${mode === mm ? "bg-[var(--color-surface)]" : "text-[var(--color-fg-muted)]"}`}
-              >
-                {mm === "user" ? "User" : "Service account"}
-              </button>
-            ))}
-          </div>
-          {mode === "user" ? (
+          <div>
             <Input
-              placeholder="user@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              placeholder="anurag@razorpay.com  or  n8n-prod@brave.otter.bot"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
             />
-          ) : (
-            <div>
-              <Input
-                placeholder="service-account name"
-                value={saName}
-                onChange={(e) => setSaName(e.target.value)}
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-              <p className="mt-1.5 text-[11px] text-[var(--color-fg-muted)]">
-                Enter the exact name. The name is the identity.
-              </p>
-            </div>
-          )}
+            <p className="mt-1.5 text-[11px] text-[var(--color-fg-muted)]">
+              Add a person by their email, or a bot by its address.
+            </p>
+          </div>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
@@ -619,7 +585,7 @@ function ShareSheet({ docId }: { docId: string }) {
           <Button
             className="w-full"
             type="submit"
-            disabled={(mode === "user" ? !email : !saName) || m.isPending}
+            disabled={!address.trim() || m.isPending}
           >
             Share
           </Button>

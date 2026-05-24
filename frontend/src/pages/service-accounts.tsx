@@ -34,17 +34,7 @@ export function ServiceAccountsPage() {
     queryKey: ["service-accounts"],
     queryFn: api.listServiceAccounts,
   });
-  const [name, setName] = useState("");
-  const create = useMutation({
-    mutationFn: () => api.createServiceAccount(name),
-    onSuccess: (r) => {
-      setName("");
-      toast.success(`Created ${r.name}`);
-      q.invalidateQueries({ queryKey: ["service-accounts"] });
-      setSelectedId(r.id);
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
+  const [creating, setCreating] = useState(false);
   const items = sas.data?.items || [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected =
@@ -52,39 +42,30 @@ export function ServiceAccountsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Service accounts
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
-          For headless agents that can’t run an interactive OAuth flow —
-          n8n workflows, scheduled jobs, CI pipelines. If you’re using the
-          CLI from a terminal, run{" "}
-          <code className="rounded bg-[var(--color-surface-muted)] px-1 font-mono text-xs">
-            aidocs auth login
-          </code>{" "}
-          instead.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Bots</h1>
+          <p className="mt-1 max-w-2xl text-sm text-[var(--color-fg-muted)]">
+            Bots are their own identities — share docs with them just like
+            you would with a person. Use them for n8n workflows, scheduled
+            jobs, or anything that runs without you.
+          </p>
+        </div>
+        <Button onClick={() => setCreating(true)}>
+          <Plus className="h-4 w-4" /> New bot
+        </Button>
       </div>
+      <NewBotDialog
+        open={creating}
+        onOpenChange={setCreating}
+        onCreated={(sa) => {
+          q.invalidateQueries({ queryKey: ["service-accounts"] });
+          setSelectedId(sa.id);
+        }}
+      />
 
       <div className="grid gap-6 md:grid-cols-[280px_1fr]">
         <div className="space-y-2">
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (name) create.mutate();
-            }}
-          >
-            <Input
-              placeholder="report-writer-bot"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Button type="submit" size="icon" disabled={!name || create.isPending}>
-              <Plus className="h-4 w-4" />
-            </Button>
-          </form>
           {sas.isLoading ? (
             <>
               <Skeleton className="h-12 w-full" />
@@ -92,7 +73,7 @@ export function ServiceAccountsPage() {
             </>
           ) : items.length === 0 ? (
             <div className="rounded-[12px] border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-fg-muted)]">
-              No service accounts yet.
+              No bots yet. Create one to share docs with it.
             </div>
           ) : (
             <ul className="space-y-1">
@@ -130,8 +111,8 @@ export function ServiceAccountsPage() {
           ) : (
             <EmptyState
               icon={<Bot className="h-5 w-5" />}
-              title="No service account selected"
-              description="Create one on the left to get started."
+              title="No bot selected"
+              description="Pick one on the left to manage its keys."
             />
           )}
         </div>
@@ -335,5 +316,151 @@ aidocs docs create report.html`}</CodeBlock>
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function NewBotDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  onCreated: (sa: { id: string; name: string }) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [customise, setCustomise] = useState(false);
+  const [domain, setDomain] = useState("");
+  const [result, setResult] = useState<{ name: string; token: string } | null>(
+    null,
+  );
+  const create = useMutation({
+    mutationFn: () =>
+      api.createServiceAccount(label, customise && domain ? domain : undefined),
+    onSuccess: (r) => {
+      setResult({ name: r.name, token: r.key.token });
+      onCreated({ id: r.id, name: r.name });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+  function reset() {
+    setLabel("");
+    setCustomise(false);
+    setDomain("");
+    setResult(null);
+  }
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) reset();
+      }}
+    >
+      <DialogContent>
+        {!result ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>New bot</DialogTitle>
+              <DialogDescription>
+                Bots are their own identities — share docs with them just like
+                you would with a person.
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (label) create.mutate();
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[var(--color-fg-muted)]">
+                  Name
+                </label>
+                <Input
+                  placeholder="n8n-prod"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoFocus
+                />
+                <p className="mt-1 text-[11px] text-[var(--color-fg-muted)]">
+                  Letters, numbers, and hyphens. We'll mint a memorable address
+                  for it — e.g. n8n-prod@brave.otter.bot.
+                </p>
+              </div>
+
+              {!customise ? (
+                <button
+                  type="button"
+                  onClick={() => setCustomise(true)}
+                  className="text-xs text-[var(--color-accent)] hover:underline"
+                >
+                  Choose a custom address
+                </button>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--color-fg-muted)]">
+                    Address
+                  </label>
+                  <Input
+                    placeholder="ops.team.bot"
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                  <p className="mt-1 text-[11px] text-[var(--color-fg-muted)]">
+                    Must end in <code className="font-mono">.bot</code>. Anything
+                    goes before that — pick something memorable.
+                  </p>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!label || create.isPending}
+                >
+                  Create bot
+                </Button>
+              </DialogFooter>
+            </form>
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Meet {result.name}</DialogTitle>
+              <DialogDescription>
+                Share docs with this address to let your bot read or edit them.
+              </DialogDescription>
+            </DialogHeader>
+            <CodeBlock>{result.name}</CodeBlock>
+            <div className="mt-4 mb-1 text-xs font-medium text-[var(--color-fg)]">
+              Bot key
+            </div>
+            <p className="mb-2 text-[11px] text-[var(--color-fg-muted)]">
+              This is the only time you'll see this key. Save it where your
+              automation can read it — not on your own machine.
+            </p>
+            <CodeBlock>{result.token}</CodeBlock>
+            <DialogFooter>
+              <Button onClick={() => onOpenChange(false)}>Done</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

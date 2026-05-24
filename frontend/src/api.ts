@@ -174,21 +174,22 @@ export const api = {
     }),
   listGrants: (doc: string) =>
     request<{ items: Grant[] }>(`/v1/documents/${doc}/grants`),
-  createGrant: (
-    doc: string,
-    principal: Principal & { name?: string },
-    role: string,
-  ) =>
+  createGrant: (doc: string, address: string, role: string) =>
     request<Grant>(`/v1/documents/${doc}/grants`, {
       method: "POST",
-      body: JSON.stringify({ principal, role }),
+      body: JSON.stringify({ address, role }),
     }),
   listServiceAccounts: () =>
     request<{ items: ServiceAccount[] }>("/v1/service-accounts"),
-  createServiceAccount: (name: string) =>
-    request<{ id: string; name: string }>("/v1/service-accounts", {
+  createServiceAccount: (label: string, domain?: string) =>
+    request<{
+      id: string;
+      label: string;
+      name: string;
+      key: { id: string; token: string };
+    }>("/v1/service-accounts", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify(domain ? { label, domain } : { label }),
     }),
   deleteDocument: (id: string) =>
     request<void>(`/v1/documents/${id}`, { method: "DELETE" }),
