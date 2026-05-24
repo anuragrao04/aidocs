@@ -16,12 +16,25 @@ import (
 //go:embed frontend_dist/*
 var frontendFS embed.FS
 
+//go:embed onboarding/sample.html
+var onboardingFS embed.FS
+
 func registerFrontendRoutes(r *gin.Engine) {
 	dist, err := fs.Sub(frontendFS, "frontend_dist")
 	if err != nil {
 		return
 	}
 	fileServer := http.FileServer(http.FS(dist))
+
+	r.GET("/onboarding/sample.html", func(c *gin.Context) {
+		b, err := fs.ReadFile(onboardingFS, "onboarding/sample.html")
+		if err != nil {
+			c.Status(http.StatusNotFound)
+			return
+		}
+		c.Header("Content-Disposition", `attachment; filename="aidocs-sample.html"`)
+		c.Data(http.StatusOK, "text/html; charset=utf-8", b)
+	})
 
 	r.GET("/assets/*filepath", gin.WrapH(http.StripPrefix("/assets/", http.FileServer(http.FS(mustSubOrSelf(dist, "assets"))))))
 	r.NoRoute(func(c *gin.Context) {

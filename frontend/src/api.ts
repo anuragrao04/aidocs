@@ -186,6 +186,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
+  deleteDocument: (id: string) =>
+    request<void>(`/v1/documents/${id}`, { method: "DELETE" }),
   updateServiceAccount: (id: string, name: string, disabled: boolean) =>
     request<ServiceAccount>(`/v1/service-accounts/${id}`, {
       method: "PATCH",
