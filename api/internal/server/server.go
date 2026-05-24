@@ -77,7 +77,7 @@ func (s *Server) routes(deps dependencies) {
 	s.engine.GET("/commit.txt", h.commitTXT)
 	registerAPIDocsRoutes(s.engine)
 	s.engine.GET("/v/:version_id", h.renderVersion)
-	registerFrontendRoutes(s.engine)
+	registerFrontendRoutes(s.engine, deps.appOrigin)
 	v1 := s.engine.Group("/v1")
 	v1.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	v1.GET("/me", requireAuth(deps.authenticator), h.me)

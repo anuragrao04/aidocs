@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"embed"
 	"io/fs"
 	"net/http"
@@ -19,12 +20,13 @@ var frontendFS embed.FS
 //go:embed onboarding/sample.html
 var onboardingFS embed.FS
 
-func registerFrontendRoutes(r *gin.Engine) {
+func registerFrontendRoutes(r *gin.Engine, publicURL string) {
 	dist, err := fs.Sub(frontendFS, "frontend_dist")
 	if err != nil {
 		return
 	}
 	fileServer := http.FileServer(http.FS(dist))
+	publicURL = strings.TrimRight(publicURL, "/")
 
 	r.GET("/onboarding/sample.html", func(c *gin.Context) {
 		b, err := fs.ReadFile(onboardingFS, "onboarding/sample.html")
@@ -52,6 +54,7 @@ func registerFrontendRoutes(r *gin.Engine) {
 			c.Status(http.StatusNotFound)
 			return
 		}
+		index = bytes.ReplaceAll(index, []byte("__AIDOCS_PUBLIC_URL_VALUE__"), []byte(publicURL))
 		c.Data(http.StatusOK, "text/html; charset=utf-8", index)
 	})
 }
