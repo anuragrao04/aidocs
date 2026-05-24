@@ -9,8 +9,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CodeBlock } from "@/components/ui/misc";
+import { publicURL } from "@/lib/config";
 
 export function DevelopersPage() {
+  const url = publicURL();
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
       <div className="mb-6">
@@ -127,7 +129,7 @@ export function DevelopersPage() {
           </CardHeader>
           <CardContent>
             <CodeBlock>{`curl -H "Authorization: Bearer <YOUR_KEY>" \\
-  ${typeof window !== "undefined" ? window.location.origin : "https://your-host"}/v1/documents`}</CodeBlock>
+  ${url}/v1/documents`}</CodeBlock>
           </CardContent>
         </Card>
       </div>

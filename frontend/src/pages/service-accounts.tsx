@@ -26,6 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { api, type ServiceAccount } from "@/api";
+import { publicURL } from "@/lib/config";
 
 export function ServiceAccountsPage() {
   const q = useQueryClient();
@@ -144,6 +145,7 @@ function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
   const name = sa.name || sa.Name || "";
   const disabled = sa.disabled || sa.Disabled || false;
   const q = useQueryClient();
+  const url = publicURL();
   const keys = useQuery({
     queryKey: ["service-account-keys", id],
     queryFn: () => api.listServiceAccountKeys(id),
@@ -299,7 +301,7 @@ aidocs docs create report.html`}</CodeBlock>
             For raw HTTP:
           </p>
           <CodeBlock>{`curl -H "Authorization: Bearer <YOUR_KEY>" \\
-  ${typeof window !== "undefined" ? window.location.origin : "https://your-host"}/v1/documents`}</CodeBlock>
+  ${url}/v1/documents`}</CodeBlock>
         </CardContent>
       </Card>
 
@@ -324,7 +326,7 @@ aidocs docs create report.html`}</CodeBlock>
               <div className="mt-4 text-xs text-[var(--color-fg-muted)]">
                 Use it as a bearer token from your headless agent, or:
               </div>
-              <CodeBlock>{`aidocs auth login --token ${revealToken.token}`}</CodeBlock>
+              <CodeBlock>{`aidocs auth login ${url} --token ${revealToken.token}`}</CodeBlock>
             </>
           )}
           <DialogFooter>

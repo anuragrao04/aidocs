@@ -4,13 +4,13 @@ import {
   ArrowRight,
   Check,
   Circle,
-  Download,
   ExternalLink,
   PartyPopper,
   Rocket,
   Sparkles,
   X,
 } from "lucide-react";
+import { publicURL } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CodeBlock } from "@/components/ui/misc";
@@ -330,32 +330,27 @@ function AgentConfigure() {
 }
 
 function TryItOut() {
+  const url = publicURL();
+  const prompt = `Download the aidocs sample report and publish it as a reviewable document:
+
+curl -sSL ${url}/onboarding/sample.html -o sample.html
+
+Then use the aidocs CLI to publish sample.html to aidocs. Give me the document URL when you're done.`;
   return (
     <div>
       <p className="mb-3 text-sm text-[var(--color-fg-muted)]">
-        Want to see the loop work without writing anything yourself?
-        Download our sample report and ask your agent to publish it.
+        Want to see the loop work without writing anything? Copy this
+        prompt into your agent — it'll fetch a sample report and
+        publish it to aidocs.
       </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild variant="outline">
-          <a href="/onboarding/sample.html" download>
-            <Download className="h-4 w-4" /> Download sample.html
-          </a>
-        </Button>
-        <Button asChild variant="ghost">
+      <CodeBlock>{prompt}</CodeBlock>
+      <div className="mt-4">
+        <Button asChild variant="ghost" size="sm">
           <Link to="/app/documents">
             <Sparkles className="h-4 w-4" /> Open documents
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         </Button>
-      </div>
-      <div className="mt-4 rounded-[10px] border border-dashed border-[var(--color-border)] bg-[var(--color-surface-muted)]/40 p-3 text-sm">
-        <div className="mb-1 text-xs font-medium text-[var(--color-fg-muted)]">
-          Then tell your agent:
-        </div>
-        <code className="text-[12.5px]">
-          Publish <b>sample.html</b> to aidocs as a reviewable document.
-        </code>
       </div>
     </div>
   );
