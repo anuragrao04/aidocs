@@ -15,6 +15,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/anuragrao/aidocs/api/internal/auth"
+	"github.com/anuragrao/aidocs/api/internal/bots"
 	"github.com/anuragrao/aidocs/api/internal/repo"
 )
 
@@ -424,19 +425,82 @@ func (h handlers) createServiceAccount(c *gin.Context) {
 		return
 	}
 	var in struct {
-		Name string `json:"name"`
+		Label  string `json:"label"`
+		Domain string `json:"domain"`
 	}
-	if err := c.ShouldBindJSON(&in); err != nil || in.Name == "" {
-		badRequest(c, "name is required")
+	if err := c.ShouldBindJSON(&in); err != nil {
+		badRequest(c, "Tell us a name for your bot.")
 		return
 	}
-	sa, err := h.deps.repository.CreateServiceAccount(c.Request.Context(), *p, in.Name)
+	if err := bots.ValidateLabel(in.Label); err != nil {
+		badRequest(c, "Use letters, numbers, and hyphens for the bot's name.")
+		return
+	}
+	explicit := in.Domain != ""
+	if explicit {
+		if err := bots.ValidateDomain(in.Domain); err != nil {
+			badRequest(c, "Addresses must end in .bot.")
+			return
+		}
+	}
+	var sa repo.ServiceAccount
+	var fullName string
+	var lastErr error
+	attempts := 1
+	if !explicit {
+		attempts = 8
+	}
+	for i := 0; i < attempts; i++ {
+		domain := in.Domain
+		if !explicit {
+			if i < 5 {
+				domain = bots.GenerateDomain()
+			} else {
+				domain = bots.GenerateDomainExtended()
+			}
+		}
+		fullName = bots.Compose(in.Label, domain)
+		var err error
+		sa, err = h.deps.repository.CreateServiceAccount(c.Request.Context(), *p, fullName)
+		if err == nil {
+			lastErr = nil
+			break
+		}
+		lastErr = err
+		if !errors.Is(err, repo.ErrConflict) {
+			internal(c)
+			return
+		}
+	}
+	if lastErr != nil {
+		if explicit {
+			c.JSON(http.StatusConflict, gin.H{"error": "address_taken", "message": "Someone already uses " + fullName + ". Try a different address."})
+			return
+		}
+		internal(c)
+		return
+	}
+	token, hash, err := auth.NewBearerToken("aidocs_sa_")
+	if err != nil {
+		internal(c)
+		return
+	}
+	keyID, err := h.deps.repository.CreateServiceAccountKey(c.Request.Context(), sa.ID, "default", hash)
 	if err != nil {
 		internal(c)
 		return
 	}
 	incServiceAccount("created", actorType(c))
-	c.JSON(http.StatusCreated, gin.H{"id": sa.ID, "name": sa.Name, "owner": gin.H{"id": sa.Owner.ID, "email": sa.Owner.Email}, "disabled": sa.Disabled, "grants": []any{}})
+	incServiceAccount("key_created", actorType(c))
+	c.JSON(http.StatusCreated, gin.H{
+		"id":       sa.ID,
+		"label":    in.Label,
+		"name":     sa.Name,
+		"owner":    gin.H{"id": sa.Owner.ID, "email": sa.Owner.Email},
+		"disabled": sa.Disabled,
+		"grants":   []any{},
+		"key":      gin.H{"id": keyID, "token": token},
+	})
 }
 
 // CreateGrant godoc
@@ -455,6 +519,7 @@ func (h handlers) createGrant(c *gin.Context) {
 		return
 	}
 	var in struct {
+		Address   string `json:"address"`
 		Principal struct {
 			Type  auth.PrincipalType `json:"type"`
 			ID    string             `json:"id"`
@@ -471,6 +536,22 @@ func (h handlers) createGrant(c *gin.Context) {
 		badRequest(c, "invalid role")
 		return
 	}
+	if in.Address != "" {
+		in.Principal.ID = ""
+		in.Principal.Type = ""
+		_, domain, ok := bots.Split(in.Address)
+		if !ok {
+			badRequest(c, "That doesn't look like an email or bot address.")
+			return
+		}
+		if strings.HasSuffix(domain, ".bot") {
+			in.Principal.Type = auth.PrincipalServiceAccount
+			in.Principal.Name = in.Address
+		} else {
+			in.Principal.Type = auth.PrincipalUser
+			in.Principal.Email = in.Address
+		}
+	}
 	principal := auth.Principal{Type: in.Principal.Type, ID: in.Principal.ID, Email: in.Principal.Email, Name: in.Principal.Name}
 	if principal.Type == auth.PrincipalUser && principal.ID == "" && principal.Email != "" {
 		var err error
@@ -480,9 +561,9 @@ func (h handlers) createGrant(c *gin.Context) {
 			return
 		}
 	} else if principal.Type == auth.PrincipalServiceAccount && principal.ID == "" && principal.Name != "" {
-		sa, err := h.deps.repository.GetServiceAccountByOwnerAndName(c.Request.Context(), p.ID, principal.Name)
+		sa, err := h.deps.repository.GetServiceAccountByName(c.Request.Context(), principal.Name)
 		if errors.Is(err, repo.ErrNotFound) {
-			notFound(c)
+			c.JSON(http.StatusNotFound, gin.H{"error": "not_found", "message": "No bot with the address " + principal.Name + "."})
 			return
 		}
 		if err != nil {

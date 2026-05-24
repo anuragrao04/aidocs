@@ -163,15 +163,26 @@ func TestServiceAccountCannotCreateDocument(t *testing.T) {
 }
 
 func TestCreateServiceAccountStartsWithoutDocumentGrants(t *testing.T) {
-	rr := do(t, newTestServer(), http.MethodPost, "/v1/service-accounts", `{"name":"razorpay-report-bot"}`, map[string]string{
+	rr := do(t, newTestServer(), http.MethodPost, "/v1/service-accounts", `{"label":"razorpay-report-bot","domain":"explicit.test.bot"}`, map[string]string{
 		"Content-Type":     "application/json",
 		"X-Test-Principal": "user:usr_1:owner@example.com:Owner",
 	})
 
 	assertStatus(t, rr, http.StatusCreated)
-	assertJSON(t, rr.Body.Bytes(), `{
+	var got map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("bad json: %v", err)
+	}
+	key, _ := got["key"].(map[string]any)
+	if tok, _ := key["token"].(string); !strings.HasPrefix(tok, "aidocs_sa_") {
+		t.Fatalf("expected aidocs_sa_ token, got %v", key)
+	}
+	delete(got, "key")
+	normalised, _ := json.Marshal(got)
+	assertJSON(t, normalised, `{
 	  "id": "sa_1",
-	  "name": "razorpay-report-bot",
+	  "label": "razorpay-report-bot",
+	  "name": "razorpay-report-bot@explicit.test.bot",
 	  "owner": { "id": "usr_1", "email": "owner@example.com" },
 	  "disabled": false,
 	  "grants": []
