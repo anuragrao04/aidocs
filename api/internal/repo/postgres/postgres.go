@@ -216,6 +216,16 @@ func (s *Store) GetServiceAccount(ctx context.Context, id string) (repo.ServiceA
 	}
 	return repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: asBool(r.Disabled), Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}, nil
 }
+func (s *Store) GetServiceAccountByOwnerAndName(ctx context.Context, ownerID, name string) (repo.ServiceAccount, error) {
+	r, err := s.q.GetServiceAccountByName(ctx, dbsqlc.GetServiceAccountByNameParams{OwnerUserID: ownerID, Name: name})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return repo.ServiceAccount{}, repo.ErrNotFound
+	}
+	if err != nil {
+		return repo.ServiceAccount{}, err
+	}
+	return repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: asBool(r.Disabled), Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}, nil
+}
 func (s *Store) PrincipalExists(ctx context.Context, p auth.Principal) (bool, error) {
 	switch p.Type {
 	case auth.PrincipalUser:

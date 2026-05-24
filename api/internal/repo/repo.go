@@ -109,6 +109,7 @@ type Repository interface {
 	CreateServiceAccount(ctx context.Context, owner auth.Principal, name string) (ServiceAccount, error)
 	ListServiceAccounts(ctx context.Context, owner auth.Principal) ([]ServiceAccount, error)
 	GetServiceAccount(ctx context.Context, id string) (ServiceAccount, error)
+	GetServiceAccountByOwnerAndName(ctx context.Context, ownerID, name string) (ServiceAccount, error)
 	UpdateServiceAccount(ctx context.Context, id, name string, disabled *bool) (ServiceAccount, error)
 	CreateServiceAccountKey(ctx context.Context, saID, name, tokenHash string) (string, error)
 	ListServiceAccountKeys(ctx context.Context, saID string) ([]ServiceAccountKey, error)
@@ -280,6 +281,16 @@ func (m *Memory) GetServiceAccount(ctx context.Context, id string) (ServiceAccou
 		return ServiceAccount{}, ErrNotFound
 	}
 	return sa, nil
+}
+func (m *Memory) GetServiceAccountByOwnerAndName(ctx context.Context, ownerID, name string) (ServiceAccount, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, sa := range m.sas {
+		if sa.Owner.ID == ownerID && sa.Name == name {
+			return sa, nil
+		}
+	}
+	return ServiceAccount{}, ErrNotFound
 }
 func (m *Memory) PrincipalExists(ctx context.Context, p auth.Principal) (bool, error) {
 	m.mu.Lock()

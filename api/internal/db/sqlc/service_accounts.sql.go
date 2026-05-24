@@ -57,6 +57,41 @@ func (q *Queries) GetServiceAccount(ctx context.Context, id string) (GetServiceA
 	return i, err
 }
 
+const getServiceAccountByName = `-- name: GetServiceAccountByName :one
+SELECT sa.id, sa.name, sa.disabled_at IS NOT NULL AS disabled, u.id AS owner_id, u.email AS owner_email, u.name AS owner_name
+FROM service_accounts sa
+JOIN users u ON u.id = sa.owner_user_id
+WHERE sa.owner_user_id = $1 AND sa.name = $2
+`
+
+type GetServiceAccountByNameParams struct {
+	OwnerUserID string
+	Name        string
+}
+
+type GetServiceAccountByNameRow struct {
+	ID         string
+	Name       string
+	Disabled   interface{}
+	OwnerID    string
+	OwnerEmail string
+	OwnerName  string
+}
+
+func (q *Queries) GetServiceAccountByName(ctx context.Context, arg GetServiceAccountByNameParams) (GetServiceAccountByNameRow, error) {
+	row := q.db.QueryRow(ctx, getServiceAccountByName, arg.OwnerUserID, arg.Name)
+	var i GetServiceAccountByNameRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Disabled,
+		&i.OwnerID,
+		&i.OwnerEmail,
+		&i.OwnerName,
+	)
+	return i, err
+}
+
 const insertServiceAccount = `-- name: InsertServiceAccount :exec
 INSERT INTO service_accounts(id,name,owner_user_id,created_by_user_id) VALUES($1,$2,$3,$3)
 `

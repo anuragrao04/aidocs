@@ -31,3 +31,9 @@ SELECT sa.id, sa.name, sa.disabled_at IS NOT NULL AS disabled, u.id AS owner_id,
 FROM service_accounts sa
 JOIN users u ON u.id = sa.owner_user_id
 WHERE sa.id = $1;
+
+-- name: GetServiceAccountByName :one
+SELECT sa.id, sa.name, sa.disabled_at IS NOT NULL AS disabled, u.id AS owner_id, u.email AS owner_email, u.name AS owner_name
+FROM service_accounts sa
+JOIN users u ON u.id = sa.owner_user_id
+WHERE sa.owner_user_id = $1 AND sa.name = $2;
