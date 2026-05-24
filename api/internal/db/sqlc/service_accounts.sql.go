@@ -61,13 +61,8 @@ const getServiceAccountByName = `-- name: GetServiceAccountByName :one
 SELECT sa.id, sa.name, sa.disabled_at IS NOT NULL AS disabled, u.id AS owner_id, u.email AS owner_email, u.name AS owner_name
 FROM service_accounts sa
 JOIN users u ON u.id = sa.owner_user_id
-WHERE sa.owner_user_id = $1 AND sa.name = $2
+WHERE sa.name = $1
 `
-
-type GetServiceAccountByNameParams struct {
-	OwnerUserID string
-	Name        string
-}
 
 type GetServiceAccountByNameRow struct {
 	ID         string
@@ -78,8 +73,8 @@ type GetServiceAccountByNameRow struct {
 	OwnerName  string
 }
 
-func (q *Queries) GetServiceAccountByName(ctx context.Context, arg GetServiceAccountByNameParams) (GetServiceAccountByNameRow, error) {
-	row := q.db.QueryRow(ctx, getServiceAccountByName, arg.OwnerUserID, arg.Name)
+func (q *Queries) GetServiceAccountByName(ctx context.Context, name string) (GetServiceAccountByNameRow, error) {
+	row := q.db.QueryRow(ctx, getServiceAccountByName, name)
 	var i GetServiceAccountByNameRow
 	err := row.Scan(
 		&i.ID,

@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -199,6 +200,10 @@ func (s *Store) CreateServiceAccount(ctx context.Context, owner auth.Principal, 
 	}
 	id := newID("sa")
 	if err := q.InsertServiceAccount(ctx, dbsqlc.InsertServiceAccountParams{ID: id, Name: name, OwnerUserID: owner.ID}); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return repo.ServiceAccount{}, repo.ErrConflict
+		}
 		return repo.ServiceAccount{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -216,8 +221,8 @@ func (s *Store) GetServiceAccount(ctx context.Context, id string) (repo.ServiceA
 	}
 	return repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: asBool(r.Disabled), Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}, nil
 }
-func (s *Store) GetServiceAccountByOwnerAndName(ctx context.Context, ownerID, name string) (repo.ServiceAccount, error) {
-	r, err := s.q.GetServiceAccountByName(ctx, dbsqlc.GetServiceAccountByNameParams{OwnerUserID: ownerID, Name: name})
+func (s *Store) GetServiceAccountByName(ctx context.Context, name string) (repo.ServiceAccount, error) {
+	r, err := s.q.GetServiceAccountByName(ctx, name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return repo.ServiceAccount{}, repo.ErrNotFound
 	}

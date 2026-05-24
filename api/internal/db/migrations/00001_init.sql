@@ -38,7 +38,7 @@ ALTER TABLE documents
 
 CREATE TABLE service_accounts (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
   owner_user_id TEXT NOT NULL REFERENCES users(id),
   created_by_user_id TEXT NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
