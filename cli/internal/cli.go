@@ -630,21 +630,39 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 }
 func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "grants", Short: "Manage document grants"}
-	var principal, role string
-	add := &cobra.Command{Use: "add <doc_id>", Short: "Add a document grant", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		cl, err := client(g)
-		if err != nil {
-			return err
-		}
-		pr := parsePrincipal(principal)
-		b, e := cl.json("POST", "/v1/documents/"+args[0]+"/grants", map[string]any{"principal": pr, "role": role})
-		if e != nil {
-			return e
-		}
-		return print(out, g, b)
-	}}
-	add.Flags().StringVar(&principal, "principal", "", "")
-	add.Flags().StringVar(&role, "role", "viewer", "")
+	var principal, address, role string
+	add := &cobra.Command{
+		Use:   "add <doc_id>",
+		Short: "Share a doc with a person or bot",
+		Long: "Share a doc by passing an email or bot address.\n\n" +
+			"Examples:\n" +
+			"  aidocs grants add doc_… --to anurag@razorpay.com --role commenter\n" +
+			"  aidocs grants add doc_… --to n8n-prod@brave.otter.bot --role editor",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, err := client(g)
+			if err != nil {
+				return err
+			}
+			body := map[string]any{"role": role}
+			switch {
+			case address != "":
+				body["address"] = address
+			case principal != "":
+				body["principal"] = parsePrincipal(principal)
+			default:
+				return errors.New("pass --to <email-or-bot-address>")
+			}
+			b, e := cl.json("POST", "/v1/documents/"+args[0]+"/grants", body)
+			if e != nil {
+				return e
+			}
+			return print(out, g, b)
+		},
+	}
+	add.Flags().StringVar(&address, "to", "", "email or bot address (e.g. anurag@razorpay.com or n8n@brave.otter.bot)")
+	add.Flags().StringVar(&principal, "principal", "", "legacy: sa:<id> or user:<email>")
+	add.Flags().StringVar(&role, "role", "viewer", "viewer, commenter, editor, or owner")
 	var r string
 	upd := &cobra.Command{Use: "update <doc_id> <grant_id>", Short: "Update a grant role", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := client(g)
@@ -866,17 +884,58 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 		return nil
 	}}
 	var name string
-	create := &cobra.Command{Use: "create <name>", Short: "Create a service account", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		cl, err := client(g)
-		if err != nil {
-			return err
-		}
-		b, e := cl.json("POST", "/v1/service-accounts", map[string]any{"name": args[0]})
-		if e != nil {
-			return e
-		}
-		return print(out, g, b)
-	}}
+	create := &cobra.Command{
+		Use:   "create <name>[@<address>]",
+		Short: "Create a bot",
+		Long: "Create a bot.\n\n" +
+			"  <name>      What appears before the @. Letters, numbers, hyphens.\n" +
+			"  <address>   Optional. Must end in .bot. If you skip it, we'll\n" +
+			"              pick something memorable for you.\n\n" +
+			"Examples:\n" +
+			"  aidocs sa create n8n-prod\n" +
+			"  aidocs sa create ci-runner@ops.team.bot\n" +
+			"  aidocs sa create nightly@crew.bot",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, err := client(g)
+			if err != nil {
+				return err
+			}
+			label := args[0]
+			body := map[string]any{}
+			if at := strings.Index(label, "@"); at >= 0 {
+				domain := label[at+1:]
+				label = label[:at]
+				if !strings.HasSuffix(domain, ".bot") {
+					return errors.New("Addresses must end in .bot. That's how aidocs tells bots apart from people.")
+				}
+				body["domain"] = domain
+			}
+			body["label"] = label
+			b, e := cl.json("POST", "/v1/service-accounts", body)
+			if e != nil {
+				return e
+			}
+			if g.json {
+				return print(out, g, b)
+			}
+			var resp struct {
+				Name string `json:"name"`
+				Key  struct {
+					Token string `json:"token"`
+				} `json:"key"`
+			}
+			if e := json.Unmarshal(b, &resp); e != nil {
+				return print(out, g, b)
+			}
+			fmt.Fprintf(out, "\u2713 Created %s\n\n", resp.Name)
+			fmt.Fprintln(out, "  This is the only time you'll see this key. Save it where your")
+			fmt.Fprintln(out, "  automation can read it \u2014 not on your own machine.")
+			fmt.Fprintln(out)
+			fmt.Fprintf(out, "    %s\n", resp.Key.Token)
+			return nil
+		},
+	}
 	var newName string
 	var enable, disable bool
 	upd := &cobra.Command{Use: "update <sa_id>", Short: "Update a service account", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
