@@ -479,9 +479,20 @@ func (h handlers) createGrant(c *gin.Context) {
 			internal(c)
 			return
 		}
+	} else if principal.Type == auth.PrincipalServiceAccount && principal.ID == "" && principal.Name != "" {
+		sa, err := h.deps.repository.GetServiceAccountByOwnerAndName(c.Request.Context(), p.ID, principal.Name)
+		if errors.Is(err, repo.ErrNotFound) {
+			notFound(c)
+			return
+		}
+		if err != nil {
+			internal(c)
+			return
+		}
+		principal = auth.Principal{Type: auth.PrincipalServiceAccount, ID: sa.ID, Name: sa.Name}
 	} else {
 		if principal.ID == "" {
-			badRequest(c, "principal id or user email is required")
+			badRequest(c, "principal id, user email, or service account name is required")
 			return
 		}
 		exists, err := h.deps.repository.PrincipalExists(c.Request.Context(), principal)
@@ -1303,7 +1314,7 @@ func commentsJSON(items []repo.Comment, placementVersionID string, placementHTML
 }
 func renderWrapperHTML(userHTML []byte, appOrigin string) []byte {
 	payload := strings.ReplaceAll(string(userHTML), "</script", "<\\/script")
-	return []byte(`<!doctype html><html><head><meta charset="utf-8"><title>aidocs render</title><style>html,body{margin:0;height:100%;overflow:hidden}#aidocs-doc{border:0;width:100%;height:100vh}.aidocs-mark{background:#ffe66d!important;box-shadow:0 0 0 2px rgba(255,214,10,.35);border-radius:3px}.aidocs-mark-active{background:#ffb703!important}</style></head><body><iframe id="aidocs-doc" sandbox="allow-scripts allow-same-origin" srcdoc="` + htmlEscape(payload) + `"></iframe><script>window.__AIDOCS_APP_ORIGIN__=` + jsString(appOrigin) + `;(` + renderBridgeJS + `)();</script></body></html>`)
+	return []byte(`<!doctype html><html><head><meta charset="utf-8"><title>aidocs render</title><style>html,body{margin:0;height:100%;overflow:hidden}#aidocs-doc{border:0;width:100%;height:100vh}.aidocs-mark{background-color:#fef08a!important;color:inherit!important;border-bottom:2px solid #ca8a04!important;cursor:pointer;transition:background-color .15s}.aidocs-mark-active{background-color:#fbbf24!important}</style></head><body><iframe id="aidocs-doc" sandbox="allow-scripts allow-same-origin" srcdoc="` + htmlEscape(payload) + `"></iframe><script>window.__AIDOCS_APP_ORIGIN__=` + jsString(appOrigin) + `;(` + renderBridgeJS + `)();</script></body></html>`)
 }
 
 const renderBridgeJS = `function(){
@@ -1312,8 +1323,9 @@ const frame=document.getElementById('aidocs-doc');
 function doc(){try{return frame.contentDocument||frame.contentWindow.document}catch(e){return null}}
 function textNodes(root){const w=(doc()||document).createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.nodeValue.trim()?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT});const a=[];let n;while(n=w.nextNode())a.push(n);return a}
 function clear(){const d=doc();if(!d)return;d.querySelectorAll('mark.aidocs-mark').forEach(m=>m.replaceWith(...m.childNodes));d.body&&d.body.normalize()}
-function markQuote(q,active){const d=doc();if(!d||!q)return 0;let count=0;for(const n of textNodes(d.body)){const i=n.nodeValue.indexOf(q);if(i<0)continue;const r=d.createRange();r.setStart(n,i);r.setEnd(n,i+q.length);const m=d.createElement('mark');m.className='aidocs-mark'+(active?' aidocs-mark-active':'');try{r.surroundContents(m);count++;if(active)m.scrollIntoView({block:'center',behavior:'smooth'});break}catch(e){}}
-return count}
+function norm(s){return (s||'').replace(/\s+/g,' ').trim()}
+function markQuote(q,active){const d=doc();if(!d||!q)return 0;const nq=norm(q);if(!nq)return 0;for(const n of textNodes(d.body)){const raw=n.nodeValue;const nText=norm(raw);if(nText.indexOf(nq)<0)continue;const i=raw.indexOf(q);if(i>=0){const r=d.createRange();r.setStart(n,i);r.setEnd(n,Math.min(raw.length,i+q.length));const m=d.createElement('mark');m.className='aidocs-mark'+(active?' aidocs-mark-active':'');try{r.surroundContents(m);if(active)m.scrollIntoView({block:'center',behavior:'smooth'});return 1}catch(e){}}else{const m=d.createElement('mark');m.className='aidocs-mark'+(active?' aidocs-mark-active':'');try{const r=d.createRange();r.selectNode(n);r.surroundContents(m);if(active)m.scrollIntoView({block:'center',behavior:'smooth'});return 1}catch(e){}}}
+return 0}
 function paint(items,active){clear();(items||[]).forEach(x=>markQuote(x.quote||x.selected_text,x.id===active))}
 function selection(){const d=doc();if(!d)return;const s=d.getSelection();if(!s||s.isCollapsed)return;const q=s.toString().trim();if(!q)return;let pre='',suf='',start=0,end=q.length;try{const body=d.body.innerText||d.body.textContent||'';start=body.indexOf(q);end=start+q.length;pre=body.slice(Math.max(0,start-64),start);suf=body.slice(end,end+64)}catch(e){}parent.postMessage({type:'aidocs:selection',quote:q,prefix:pre,suffix:suf,start_offset:start,end_offset:end,dom_path:'body'},appOrigin==='self'?'*':appOrigin)}
 frame.addEventListener('load',()=>{const d=doc();if(!d)return;d.addEventListener('mouseup',()=>setTimeout(selection,0));d.addEventListener('keyup',()=>setTimeout(selection,0));parent.postMessage({type:'aidocs:ready'},appOrigin==='self'?'*':appOrigin)})
