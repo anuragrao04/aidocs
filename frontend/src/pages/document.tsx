@@ -5,8 +5,6 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
-  Clock,
   ExternalLink,
   MoreHorizontal,
   Share2,
@@ -49,7 +47,6 @@ import {
   currentVersionID,
   docTitle,
   versionID,
-  versionNumber,
 } from "@/api";
 
 export function DocumentPage() {
@@ -62,12 +59,10 @@ export function DocumentPage() {
     queryKey: ["versions", id],
     queryFn: () => api.listVersions(id),
   });
-  const [selectedVersion, setSelectedVersion] = useState<string>("");
   const [selection, setSelection] = useState("");
   const [activeComment, setActiveComment] = useState<string>();
 
   const current =
-    selectedVersion ||
     currentVersionID(doc.data || {}) ||
     versionID(versions.data?.items?.[0] || {});
 
@@ -87,9 +82,7 @@ export function DocumentPage() {
       <DocBar
         title={docTitle(doc.data)}
         docId={id}
-        versions={versions.data?.items || []}
         current={current}
-        onSelectVersion={setSelectedVersion}
       />
       <div className="flex flex-1 overflow-hidden">
         <section className="relative flex-1 bg-[var(--color-surface-muted)]">
@@ -121,17 +114,12 @@ export function DocumentPage() {
 function DocBar({
   title,
   docId,
-  versions,
   current,
-  onSelectVersion,
 }: {
   title: string;
   docId: string;
-  versions: any[];
   current: string;
-  onSelectVersion: (v: string) => void;
 }) {
-  const currentV = versions.find((v) => versionID(v) === current);
   const nav = useNavigate();
   const q = useQueryClient();
   const del = useMutation({
@@ -156,35 +144,6 @@ function DocBar({
           {docId}
         </div>
       </div>
-      <Dropdown>
-        <DropdownTrigger asChild>
-          <Button variant="outline" size="sm">
-            v{currentV ? versionNumber(currentV) : "—"}{" "}
-            <ChevronDown className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownTrigger>
-        <DropdownContent>
-          {versions.slice(0, 8).map((v) => (
-            <DropdownItem
-              key={versionID(v)}
-              onSelect={() => onSelectVersion(versionID(v))}
-              className={
-                versionID(v) === current ? "bg-[var(--color-surface-muted)]" : ""
-              }
-            >
-              <Clock className="h-3.5 w-3.5" />
-              <div className="flex-1">
-                <div className="text-sm">Version {versionNumber(v)}</div>
-                <div className="truncate text-[11px] text-[var(--color-fg-muted)]">
-                  {v.change_summary || v.ChangeSummary || "—"}
-                </div>
-              </div>
-            </DropdownItem>
-          ))}
-          <DropdownSeparator />
-          <UploadVersionItem docId={docId} baseVersion={current} />
-        </DropdownContent>
-      </Dropdown>
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="outline" size="sm">
@@ -207,6 +166,8 @@ function DocBar({
           >
             <ExternalLink className="h-4 w-4" /> Open raw HTML
           </DropdownItem>
+          <UploadVersionItem docId={docId} baseVersion={current} />
+          <DropdownSeparator />
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <DropdownItem
@@ -340,9 +301,21 @@ function RenderFrame({
       })) || [],
     [comments.data],
   );
+  const paintRef = useRef({ comments: paintPayload, active: activeComment });
+  paintRef.current = { comments: paintPayload, active: activeComment };
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.data?.type === "aidocs:selection") onSelect(e.data.quote);
+      if (e.data?.type === "aidocs:ready") {
+        ref.current?.contentWindow?.postMessage(
+          {
+            type: "aidocs:paint",
+            comments: paintRef.current.comments,
+            active: paintRef.current.active,
+          },
+          "*",
+        );
+      }
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -356,27 +329,22 @@ function RenderFrame({
   if (token.isLoading) return <Center>Preparing secure render…</Center>;
   if (token.error) return <Center>Could not create render token.</Center>;
   return (
-    <div className="relative h-full">
-      <iframe
-        ref={ref}
-        className="h-full w-full bg-white"
-        src={token.data!.url}
-        sandbox="allow-scripts allow-same-origin"
-        onLoad={() =>
-          ref.current?.contentWindow?.postMessage(
-            {
-              type: "aidocs:paint",
-              comments: paintPayload,
-              active: activeComment,
-            },
-            "*",
-          )
-        }
-      />
-      <div className="pointer-events-none absolute bottom-3 left-3 rounded-full border border-[var(--color-border)] bg-[var(--color-surface)]/90 px-3 py-1 text-[11px] text-[var(--color-fg-muted)] backdrop-blur">
-        Sandboxed · {comments.data?.items?.length || 0} highlights
-      </div>
-    </div>
+    <iframe
+      ref={ref}
+      className="h-full w-full bg-white"
+      src={token.data!.url}
+      sandbox="allow-scripts allow-same-origin"
+      onLoad={() =>
+        ref.current?.contentWindow?.postMessage(
+          {
+            type: "aidocs:paint",
+            comments: paintPayload,
+            active: activeComment,
+          },
+          "*",
+        )
+      }
+    />
   );
 }
 
@@ -567,13 +535,9 @@ function ShareSheet({ docId }: { docId: string }) {
     queryKey: ["grants", docId],
     queryFn: () => api.listGrants(docId),
   });
-  const sas = useQuery({
-    queryKey: ["service-accounts"],
-    queryFn: api.listServiceAccounts,
-  });
   const [mode, setMode] = useState<"user" | "service_account">("user");
   const [email, setEmail] = useState("");
-  const [sa, setSa] = useState("");
+  const [saName, setSaName] = useState("");
   const [role, setRole] = useState("commenter");
   const m = useMutation({
     mutationFn: () =>
@@ -581,15 +545,21 @@ function ShareSheet({ docId }: { docId: string }) {
         docId,
         mode === "user"
           ? { type: "user", id: "", email }
-          : { type: "service_account", id: sa },
+          : { type: "service_account", id: "", name: saName },
         role,
       ),
     onSuccess: () => {
       setEmail("");
+      setSaName("");
       toast.success("Access granted.");
       q.invalidateQueries({ queryKey: ["grants", docId] });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+    onError: (e) =>
+      toast.error(
+        e instanceof Error && e.message
+          ? e.message
+          : "No service account with that exact name.",
+      ),
   });
   return (
     <SheetContent>
@@ -623,18 +593,19 @@ function ShareSheet({ docId }: { docId: string }) {
               onChange={(e) => setEmail(e.target.value)}
             />
           ) : (
-            <select
-              value={sa}
-              onChange={(e) => setSa(e.target.value)}
-              className="h-9 w-full rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
-            >
-              <option value="">Choose service account</option>
-              {sas.data?.items?.map((x) => (
-                <option key={x.id || x.ID} value={x.id || x.ID}>
-                  {x.name || x.Name}
-                </option>
-              ))}
-            </select>
+            <div>
+              <Input
+                placeholder="service-account name"
+                value={saName}
+                onChange={(e) => setSaName(e.target.value)}
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+              <p className="mt-1.5 text-[11px] text-[var(--color-fg-muted)]">
+                Enter the exact name. The name is the identity.
+              </p>
+            </div>
           )}
           <select
             value={role}
@@ -648,7 +619,7 @@ function ShareSheet({ docId }: { docId: string }) {
           <Button
             className="w-full"
             type="submit"
-            disabled={(mode === "user" ? !email : !sa) || m.isPending}
+            disabled={(mode === "user" ? !email : !saName) || m.isPending}
           >
             Share
           </Button>

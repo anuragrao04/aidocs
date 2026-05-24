@@ -174,7 +174,11 @@ export const api = {
     }),
   listGrants: (doc: string) =>
     request<{ items: Grant[] }>(`/v1/documents/${doc}/grants`),
-  createGrant: (doc: string, principal: Principal, role: string) =>
+  createGrant: (
+    doc: string,
+    principal: Principal & { name?: string },
+    role: string,
+  ) =>
     request<Grant>(`/v1/documents/${doc}/grants`, {
       method: "POST",
       body: JSON.stringify({ principal, role }),
