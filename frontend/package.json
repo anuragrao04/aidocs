@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build && rm -rf ../api/internal/server/frontend_dist && cp -R dist ../api/internal/server/frontend_dist",
+    "build": "tsc -b && vite build && rsync -a --delete --exclude '.gitkeep' dist/ ../api/internal/server/frontend_dist/",
     "preview": "vite preview"
   },
   "keywords": [],

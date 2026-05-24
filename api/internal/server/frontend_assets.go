@@ -11,10 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// frontendFS contains the Vite production build. The placeholder index.html
-// keeps the server buildable until the real frontend build is wired into CI.
+// frontendFS contains the Vite production build. The directory is
+// populated by `make frontend` (or `npm run build` in frontend/) and is
+// gitignored apart from .gitkeep placeholders, so this embed always has
+// something to point at even when no build has happened yet. The
+// fallback path in registerFrontendRoutes returns 404 for index.html in
+// that case.
 //
-//go:embed frontend_dist/*
+//go:embed all:frontend_dist
 var frontendFS embed.FS
 
 //go:embed onboarding/sample.html
