@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 
@@ -52,6 +54,9 @@ func main() {
 	if appOrigin == "" {
 		log.Fatal("APP_ORIGIN is required")
 	}
+	if err := validateOrigin("APP_ORIGIN", appOrigin); err != nil {
+		log.Fatal(err)
+	}
 	clientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
 	clientSecret := os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 	if clientID == "" || clientSecret == "" {
@@ -65,6 +70,9 @@ func main() {
 	renderOrigin := os.Getenv("RENDER_ORIGIN")
 	if renderOrigin == "" {
 		log.Fatal("RENDER_ORIGIN is required")
+	}
+	if err := validateOrigin("RENDER_ORIGIN", renderOrigin); err != nil {
+		log.Fatal(err)
 	}
 
 	srv := server.New(server.Config{
@@ -83,6 +91,23 @@ func main() {
 	if err := srv.Run(addr); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func validateOrigin(name, value string) error {
+	if strings.HasSuffix(value, "/") {
+		return fmt.Errorf("%s must not end with a trailing slash (got %q). Set it to something like https://example.com", name, value)
+	}
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("%s must be an absolute URL with scheme http:// or https:// (got %q). Set it to something like https://example.com", name, value)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("%s must use http:// or https:// (got scheme %q in %q)", name, u.Scheme, value)
+	}
+	if u.Path != "" && u.Path != "/" {
+		return fmt.Errorf("%s must not include a path (got %q). Set it to something like https://example.com", name, value)
+	}
+	return nil
 }
 
 func splitCSV(s string) []string {

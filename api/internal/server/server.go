@@ -1394,8 +1394,7 @@ func commentsJSON(items []repo.Comment, placementVersionID string, placementHTML
 	return out
 }
 func renderWrapperHTML(userHTML []byte, appOrigin string) []byte {
-	payload := strings.ReplaceAll(string(userHTML), "</script", "<\\/script")
-	return []byte(`<!doctype html><html><head><meta charset="utf-8"><title>aidocs render</title><style>html,body{margin:0;height:100%;overflow:hidden}#aidocs-doc{border:0;width:100%;height:100vh}.aidocs-mark{background-color:#fef08a!important;color:inherit!important;border-bottom:2px solid #ca8a04!important;cursor:pointer;transition:background-color .15s}.aidocs-mark-active{background-color:#fbbf24!important}</style></head><body><iframe id="aidocs-doc" sandbox="allow-scripts allow-same-origin" srcdoc="` + htmlEscape(payload) + `"></iframe><script>window.__AIDOCS_APP_ORIGIN__=` + jsString(appOrigin) + `;(` + renderBridgeJS + `)();</script></body></html>`)
+	return []byte(`<!doctype html><html><head><meta charset="utf-8"><title>aidocs render</title><style>html,body{margin:0;height:100%;overflow:hidden}#aidocs-doc{border:0;width:100%;height:100vh}.aidocs-mark{background-color:#fef08a!important;color:inherit!important;border-bottom:2px solid #ca8a04!important;cursor:pointer;transition:background-color .15s}.aidocs-mark-active{background-color:#fbbf24!important}</style></head><body><iframe id="aidocs-doc" sandbox="allow-scripts allow-same-origin" srcdoc="` + htmlEscape(string(userHTML)) + `"></iframe><script>window.__AIDOCS_APP_ORIGIN__=` + jsString(appOrigin) + `;(` + renderBridgeJS + `)();</script></body></html>`)
 }
 
 const renderBridgeJS = `function(){
