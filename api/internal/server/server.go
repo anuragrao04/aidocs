@@ -116,7 +116,7 @@ func (s *Server) routes(deps dependencies) {
 	s.engine.GET("/.well-known/aidocs.json", h.discovery)
 	s.engine.GET("/commit.txt", h.commitTXT)
 	registerAPIDocsRoutes(s.engine)
-	s.engine.GET("/v/:version_id", h.renderVersion)
+	s.engine.GET("/v/:id/:version_id", h.renderVersion)
 	registerFrontendRoutes(s.engine, deps.appOrigin)
 
 	v1 := s.engine.Group("/v1")

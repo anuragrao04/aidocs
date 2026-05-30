@@ -54,7 +54,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/v/{version_id}": {
+        "/v/{id}/{version_id}": {
             "get": {
                 "produces": [
                     "text/html"
@@ -64,6 +64,13 @@ const docTemplate = `{
                 ],
                 "summary": "Render version wrapper",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
                     {
                         "type": "string",
                         "description": "Version ID",

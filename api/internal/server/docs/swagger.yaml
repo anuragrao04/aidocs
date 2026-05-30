@@ -131,9 +131,14 @@ paths:
       summary: Build commit SHA
       tags:
       - discovery
-  /v/{version_id}:
+  /v/{id}/{version_id}:
     get:
       parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
       - description: Version ID
         in: path
         name: version_id

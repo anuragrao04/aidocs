@@ -430,7 +430,7 @@ func TestRenderCSPAllowsConfiguredAppOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rr := do(t, h, http.MethodGet, "/v/ver_1?token="+tok.Token, "", nil)
+	rr := do(t, h, http.MethodGet, "/v/doc_1/ver_1?token="+tok.Token, "", nil)
 	assertStatus(t, rr, http.StatusOK)
 	if got := rr.Header().Get("Content-Security-Policy"); !strings.Contains(got, "frame-ancestors https://app.example") {
 		t.Fatalf("CSP = %q, want frame-ancestors for configured app origin", got)
@@ -439,8 +439,8 @@ func TestRenderCSPAllowsConfiguredAppOrigin(t *testing.T) {
 
 func TestRenderRouteRequiresRenderHostWhenConfigured(t *testing.T) {
 	h := newConfiguredTestServer(server.Config{Environment: "test", AppOrigin: "https://app.example", RenderOrigin: "https://doc.example", SessionSecret: "test-secret"})
-	token := (auth.SessionCodec{Secret: []byte("test-secret")}).SignForAudience("render:ver_1", "render", 5*time.Minute)
-	req := httptest.NewRequest(http.MethodGet, "/v/ver_1?token="+token, nil)
+	token := (auth.SessionCodec{Secret: []byte("test-secret")}).SignForAudience("render:doc_1/ver_1", "render", 5*time.Minute)
+	req := httptest.NewRequest(http.MethodGet, "/v/doc_1/ver_1?token="+token, nil)
 	req.Host = "app.example"
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -580,7 +580,7 @@ func TestRenderRouteReturnsWrapperNotRawHTML(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rr := do(t, h, http.MethodGet, "/v/ver_1?token="+tok.Token, "", nil)
+	rr := do(t, h, http.MethodGet, "/v/doc_1/ver_1?token="+tok.Token, "", nil)
 	assertStatus(t, rr, http.StatusOK)
 	if !strings.Contains(rr.Body.String(), `<iframe id="aidocs-doc"`) || !strings.Contains(rr.Body.String(), "&lt;html&gt;&lt;/html&gt;") {
 		t.Fatalf("body = %q, want render wrapper with escaped srcdoc", rr.Body.String())

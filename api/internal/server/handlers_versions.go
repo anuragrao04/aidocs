@@ -73,8 +73,9 @@ func (h handlers) createRenderToken(c *gin.Context) {
 	if !ok {
 		return
 	}
-	token := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).SignForAudience(renderAudiencePrefix+v.ID, "render", 5*time.Minute)
-	path := "/v/" + v.ID + "?token=" + url.QueryEscape(token)
+	subject := renderAudiencePrefix + v.DocumentID + "/" + v.ID
+	token := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).SignForAudience(subject, "render", 5*time.Minute)
+	path := "/v/" + v.DocumentID + "/" + v.ID + "?token=" + url.QueryEscape(token)
 	if h.deps.renderOrigin != "" {
 		path = strings.TrimRight(h.deps.renderOrigin, "/") + path
 	}
@@ -85,19 +86,20 @@ func (h handlers) createRenderToken(c *gin.Context) {
 // RenderVersion godoc
 // @Summary Render version wrapper
 // @Tags render
+// @Param id path string true "Document ID"
 // @Param version_id path string true "Version ID"
 // @Param token query string true "Render token"
 // @Produce html
 // @Success 200 {string} string
-// @Router /v/{version_id} [get]
+// @Router /v/{id}/{version_id} [get]
 func (h handlers) renderVersion(c *gin.Context) {
 	if h.deps.renderOrigin != "" && !hostMatchesOrigin(c.Request.Host, h.deps.renderOrigin) {
 		notFound(c)
 		return
 	}
-	vid := c.Param("version_id")
+	docID, vid := c.Param("id"), c.Param("version_id")
 	uid, ok := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).VerifyAudience(c.Query("token"), "render")
-	if !ok || uid != renderAudiencePrefix+vid {
+	if !ok || uid != renderAudiencePrefix+docID+"/"+vid {
 		c.JSON(http.StatusUnauthorized, errorResponse("unauthorized", "invalid render token", nil))
 		return
 	}
