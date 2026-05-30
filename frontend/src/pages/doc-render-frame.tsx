@@ -117,7 +117,10 @@ export function RenderFrame() {
     <iframe
       ref={ref}
       title="Rendered document"
-      className="h-full w-full bg-white"
+      // Match the frame to the resolved theme so dark readers don't see a
+      // white flash before the document paints.
+      className="h-full w-full"
+      style={{ background: theme === "dark" ? "#0b0d12" : "#fff" }}
       src={frameSrc}
       sandbox="allow-scripts allow-same-origin"
     />
