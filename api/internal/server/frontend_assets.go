@@ -43,7 +43,7 @@ func registerFrontendRoutes(r *gin.Engine, publicURL string) {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", b)
 	})
 
-	r.GET("/assets/*filepath", gin.WrapH(http.StripPrefix("/assets/", http.FileServer(http.FS(subOrSelf(dist, "assets"))))))
+	r.GET("/assets/*filepath", gin.WrapH(http.StripPrefix("/assets/", http.FileServer(http.FS(subOrEmpty(dist, "assets"))))))
 	r.NoRoute(func(c *gin.Context) {
 		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
 			c.Status(http.StatusNotFound)
@@ -64,16 +64,22 @@ func registerFrontendRoutes(r *gin.Engine, publicURL string) {
 	})
 }
 
-// subOrSelf returns a sub-filesystem rooted at dir. If dir does not exist it
-// logs a warning and returns fsys unchanged.
-func subOrSelf(fsys fs.FS, dir string) fs.FS {
+// subOrEmpty returns a sub-filesystem rooted at dir. If dir does not exist it
+// logs a warning and returns an empty FS, so missing assets 404 rather than
+// exposing the parent dist (index.html etc.) under the mounted path.
+func subOrEmpty(fsys fs.FS, dir string) fs.FS {
 	sub, err := fs.Sub(fsys, dir)
 	if err != nil {
-		log.Printf("subOrSelf: falling back to parent FS because %q not found: %v", dir, err)
-		return fsys
+		log.Printf("subOrEmpty: %q not found, serving empty FS: %v", dir, err)
+		return emptyFS{}
 	}
 	return sub
 }
+
+// emptyFS is an fs.FS with no files; every Open returns fs.ErrNotExist.
+type emptyFS struct{}
+
+func (emptyFS) Open(string) (fs.File, error) { return nil, fs.ErrNotExist }
 
 func fileExists(fsys fs.FS, name string) bool {
 	info, err := fs.Stat(fsys, name)

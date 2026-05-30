@@ -115,9 +115,6 @@ func routeLabel(c *gin.Context) string {
 	if p := c.FullPath(); p != "" {
 		return p
 	}
-	if c.Request.URL.Path == "/metrics" {
-		return "/metrics"
-	}
 	return "unmatched"
 }
 

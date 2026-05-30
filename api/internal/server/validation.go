@@ -7,9 +7,10 @@ import (
 	"github.com/anuragrao/aidocs/api/internal/repo"
 )
 
+var roleRank = map[repo.Role]int{repo.RoleViewer: 1, repo.RoleCommenter: 2, repo.RoleEditor: 3, repo.RoleOwner: 4}
+
 func atLeast(have repo.Role, need repo.Role) bool {
-	rank := map[repo.Role]int{repo.RoleViewer: 1, repo.RoleCommenter: 2, repo.RoleEditor: 3, repo.RoleOwner: 4}
-	return rank[have] >= rank[need]
+	return roleRank[have] >= roleRank[need]
 }
 
 func safeWebRedirect(redirect string) bool {
