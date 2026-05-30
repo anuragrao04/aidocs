@@ -10,7 +10,8 @@ import { useDoc } from "./doc-context";
 // messages with the in-iframe bridge. Message origins are validated on both
 // ends, and painting is driven by the bridge's ready signal.
 export function RenderFrame() {
-  const { version, comments, activeComment, setSelection } = useDoc();
+  const { version, comments, activeComment, setSelection, setActiveComment } =
+    useDoc();
   const ref = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
 
@@ -64,6 +65,9 @@ export function RenderFrame() {
         const quote = anchor?.quote ?? e.data.quote;
         if (quote) setSelection({ quote, anchor });
       }
+      if (e.data?.type === "aidocs:activate" && e.data.id) {
+        setActiveComment(e.data.id as string);
+      }
       if (e.data?.type === "aidocs:ready") {
         readyRef.current = true;
         paint();
@@ -71,7 +75,7 @@ export function RenderFrame() {
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [frameOrigin, paint, setSelection]);
+  }, [frameOrigin, paint, setSelection, setActiveComment]);
 
   // Push fresh paint data once the frame is ready and whenever it changes.
   useEffect(() => {

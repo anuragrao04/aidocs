@@ -151,6 +151,12 @@ export function Comments() {
 function CommentCard({ c, docId }: { c: Comment; docId: string }) {
   const q = useQueryClient();
   const { activeComment, setActiveComment } = useDoc();
+  const cardRef = useRef<HTMLElement>(null);
+  const active = activeComment === c.id;
+  useEffect(() => {
+    if (active)
+      cardRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [active]);
   const m = useMutation({
     mutationFn: (status: string) => api.patchComment(docId, c.id, c.body, status),
     onSuccess: () => q.invalidateQueries({ queryKey: queryKeys.comments(docId) }),
@@ -160,8 +166,9 @@ function CommentCard({ c, docId }: { c: Comment; docId: string }) {
   const resolved = c.status === COMMENT_STATUS.resolved;
   return (
     <article
-      className={`cursor-pointer rounded-[12px] border bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-border-strong)] ${activeComment === c.id ? "border-[var(--color-border-strong)] ring-1 ring-[var(--color-border-strong)]" : "border-[var(--color-border)]"} ${resolved ? "opacity-70" : ""}`}
-      onClick={() => setActiveComment(activeComment === c.id ? undefined : c.id)}
+      ref={cardRef}
+      className={`cursor-pointer rounded-[12px] border bg-[var(--color-surface)] p-3 transition-colors hover:border-[var(--color-border-strong)] ${active ? "border-[var(--color-border-strong)] ring-1 ring-[var(--color-border-strong)]" : "border-[var(--color-border)]"} ${resolved ? "opacity-70" : ""}`}
+      onClick={() => setActiveComment(active ? undefined : c.id)}
     >
       <div className="mb-1 flex items-center justify-between">
         <span className="text-xs font-semibold">
