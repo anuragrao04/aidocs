@@ -5,6 +5,9 @@ project_name: aidocs
 before:
   hooks:
     - go mod tidy
+    # Generate shell completions from the live command tree so they always
+    # match the shipped binary.
+    - sh -c 'mkdir -p completions && for sh in bash zsh fish; do go run ./cli completion "$sh" > "completions/aidocs.$sh"; done'
 
 builds:
   - id: aidocs
@@ -33,6 +36,7 @@ archives:
       - LICENSE
       - README.md
       - cli/README.md
+      - completions/*
 
 checksum:
   name_template: checksums.txt
@@ -52,5 +56,8 @@ brews:
     directory: Formula
     install: |
       bin.install "aidocs"
+      bash_completion.install "completions/aidocs.bash" => "aidocs"
+      zsh_completion.install "completions/aidocs.zsh" => "_aidocs"
+      fish_completion.install "completions/aidocs.fish"
     test: |
       system "#{bin}/aidocs", "--help"

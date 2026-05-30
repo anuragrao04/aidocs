@@ -48,3 +48,4 @@ api/internal/server/frontend_dist/*
 !api/internal/server/frontend_dist/assets
 api/internal/server/frontend_dist/assets/*
 !api/internal/server/frontend_dist/assets/.gitkeep
+completions/
