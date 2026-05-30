@@ -21,14 +21,13 @@ func (q *Queries) DeleteDocument(ctx context.Context, id string) error {
 }
 
 const getDocument = `-- name: GetDocument :one
-SELECT d.id,d.title,d.visibility,d.current_version_id,u.id AS owner_id,u.email AS owner_email,u.name AS owner_name
+SELECT d.id,d.title,d.current_version_id,u.id AS owner_id,u.email AS owner_email,u.name AS owner_name
 FROM documents d JOIN users u ON u.id=d.owner_id WHERE d.id=$1
 `
 
 type GetDocumentRow struct {
 	ID               string
 	Title            string
-	Visibility       string
 	CurrentVersionID pgtype.Text
 	OwnerID          string
 	OwnerEmail       string
@@ -41,7 +40,6 @@ func (q *Queries) GetDocument(ctx context.Context, id string) (GetDocumentRow, e
 	err := row.Scan(
 		&i.ID,
 		&i.Title,
-		&i.Visibility,
 		&i.CurrentVersionID,
 		&i.OwnerID,
 		&i.OwnerEmail,
@@ -96,28 +94,22 @@ func (q *Queries) GetDocumentVersionForUpdate(ctx context.Context, documentID st
 }
 
 const insertDocument = `-- name: InsertDocument :exec
-INSERT INTO documents(id,title,owner_id,visibility) VALUES($1,$2,$3,$4)
+INSERT INTO documents(id,title,owner_id) VALUES($1,$2,$3)
 `
 
 type InsertDocumentParams struct {
-	ID         string
-	Title      string
-	OwnerID    string
-	Visibility string
+	ID      string
+	Title   string
+	OwnerID string
 }
 
 func (q *Queries) InsertDocument(ctx context.Context, arg InsertDocumentParams) error {
-	_, err := q.db.Exec(ctx, insertDocument,
-		arg.ID,
-		arg.Title,
-		arg.OwnerID,
-		arg.Visibility,
-	)
+	_, err := q.db.Exec(ctx, insertDocument, arg.ID, arg.Title, arg.OwnerID)
 	return err
 }
 
 const listDocuments = `-- name: ListDocuments :many
-SELECT d.id,d.title,d.visibility,d.current_version_id,u.id AS owner_id,u.email AS owner_email,u.name AS owner_name
+SELECT d.id,d.title,d.current_version_id,u.id AS owner_id,u.email AS owner_email,u.name AS owner_name
 FROM documents d JOIN users u ON u.id=d.owner_id
 WHERE (d.owner_id=$1 AND $2='user')
    OR EXISTS (
@@ -125,8 +117,7 @@ WHERE (d.owner_id=$1 AND $2='user')
        WHERE g.resource_type='document'
          AND g.resource_id=d.id
          AND g.revoked_at IS NULL
-         AND g.principal_type=$2
-         AND g.principal_id=$1
+         AND ((g.principal_type=$2 AND g.principal_id=$1) OR g.principal_type='anyone')
    )
 ORDER BY d.updated_at DESC
 `
@@ -139,7 +130,6 @@ type ListDocumentsParams struct {
 type ListDocumentsRow struct {
 	ID               string
 	Title            string
-	Visibility       string
 	CurrentVersionID pgtype.Text
 	OwnerID          string
 	OwnerEmail       string
@@ -158,7 +148,6 @@ func (q *Queries) ListDocuments(ctx context.Context, arg ListDocumentsParams) ([
 		if err := rows.Scan(
 			&i.ID,
 			&i.Title,
-			&i.Visibility,
 			&i.CurrentVersionID,
 			&i.OwnerID,
 			&i.OwnerEmail,
@@ -199,19 +188,5 @@ type UpdateDocumentTitleParams struct {
 
 func (q *Queries) UpdateDocumentTitle(ctx context.Context, arg UpdateDocumentTitleParams) error {
 	_, err := q.db.Exec(ctx, updateDocumentTitle, arg.Title, arg.ID)
-	return err
-}
-
-const updateDocumentVisibility = `-- name: UpdateDocumentVisibility :exec
-UPDATE documents SET visibility=$1,updated_at=now() WHERE id=$2
-`
-
-type UpdateDocumentVisibilityParams struct {
-	Visibility string
-	ID         string
-}
-
-func (q *Queries) UpdateDocumentVisibility(ctx context.Context, arg UpdateDocumentVisibilityParams) error {
-	_, err := q.db.Exec(ctx, updateDocumentVisibility, arg.Visibility, arg.ID)
 	return err
 }

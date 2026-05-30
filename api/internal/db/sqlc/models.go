@@ -49,7 +49,6 @@ type Document struct {
 	ID               string
 	Title            string
 	OwnerID          string
-	Visibility       string
 	CurrentVersionID pgtype.Text
 	CreatedAt        pgtype.Timestamptz
 	UpdatedAt        pgtype.Timestamptz
