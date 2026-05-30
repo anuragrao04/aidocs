@@ -42,7 +42,7 @@ var (
 	documentEventsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "aidocs_document_events_total",
 		Help: "Document lifecycle and interaction events.",
-	}, []string{"event", "visibility", "actor_type"})
+	}, []string{"event", "actor_type"})
 	versionEventsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "aidocs_version_events_total",
 		Help: "Document version lifecycle and interaction events.",
@@ -127,8 +127,8 @@ func actorType(c *gin.Context) string {
 }
 
 func incAuth(kind, outcome string) { authAttemptsTotal.WithLabelValues(kind, outcome).Inc() }
-func incDocument(event, visibility, actor string) {
-	documentEventsTotal.WithLabelValues(event, visibility, actor).Inc()
+func incDocument(event, actor string) {
+	documentEventsTotal.WithLabelValues(event, actor).Inc()
 }
 func incVersion(event, actor string) { versionEventsTotal.WithLabelValues(event, actor).Inc() }
 func incComment(event, status, actor string) {

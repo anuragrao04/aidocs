@@ -19,7 +19,6 @@ import (
 // @Accept multipart/form-data
 // @Produce json
 // @Param title formData string true "Document title"
-// @Param visibility formData string false "private|org|link"
 // @Param file formData file true "Single-file HTML"
 // @Success 201 {object} map[string]interface{}
 // @Router /v1/documents [post]
@@ -30,14 +29,6 @@ func (h handlers) createDocument(c *gin.Context) {
 		return
 	}
 	title := c.PostForm("title")
-	vis := c.PostForm("visibility")
-	if vis == "" {
-		vis = visibilityPrivate
-	}
-	if !validVisibility(vis) {
-		badRequest(c, "invalid visibility")
-		return
-	}
 	html, err := readMultipartFile(c, "file")
 	if errors.Is(err, errPayloadTooLarge) {
 		c.JSON(http.StatusRequestEntityTooLarge, errorResponse("payload_too_large", "HTML file exceeds 10 MiB", nil))
@@ -48,7 +39,7 @@ func (h handlers) createDocument(c *gin.Context) {
 		return
 	}
 	observeHTML("document_create", len(html))
-	d, _, err := h.deps.repository.CreateDocument(c.Request.Context(), *p, title, vis, html)
+	d, _, err := h.deps.repository.CreateDocument(c.Request.Context(), *p, title, html)
 	if err != nil {
 		if errors.Is(err, blob.ErrStorage) {
 			c.JSON(http.StatusBadGateway, errorResponse("blob_storage_failed", "could not upload HTML to blob storage", nil))
@@ -57,7 +48,7 @@ func (h handlers) createDocument(c *gin.Context) {
 		internalErr(c, err)
 		return
 	}
-	incDocument("created", d.Visibility, actorType(c))
+	incDocument("created", actorType(c))
 	incVersion("created_initial", actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": d.ID, "current_version_id": d.CurrentVersionID})
 }
@@ -111,16 +102,16 @@ func (h handlers) patchDocument(c *gin.Context) {
 	if !h.needDocRole(c, c.Param("id"), repo.RoleOwner) {
 		return
 	}
-	var in struct{ Title, Visibility string }
+	var in struct{ Title string }
 	if err := c.ShouldBindJSON(&in); err != nil {
 		badRequest(c, "invalid body")
 		return
 	}
-	if in.Visibility != "" && !validVisibility(in.Visibility) {
-		badRequest(c, "invalid visibility")
+	if in.Title == "" {
+		badRequest(c, "nothing to update; provide a title")
 		return
 	}
-	d, err := h.deps.repository.UpdateDocument(c.Request.Context(), c.Param("id"), in.Title, in.Visibility)
+	d, err := h.deps.repository.UpdateDocument(c.Request.Context(), c.Param("id"), in.Title)
 	if err != nil {
 		internalErr(c, err)
 		return

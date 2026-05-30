@@ -28,10 +28,6 @@ func validGrantRole(role repo.Role) bool {
 	return role == repo.RoleViewer || role == repo.RoleCommenter || role == repo.RoleEditor
 }
 
-func validVisibility(v string) bool {
-	return v == visibilityPrivate || v == visibilityOrg || v == visibilityLink
-}
-
 func hostMatchesOrigin(host, origin string) bool {
 	u, err := url.Parse(origin)
 	if err != nil || u.Host == "" {

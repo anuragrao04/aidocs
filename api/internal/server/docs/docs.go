@@ -258,6 +258,26 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/config": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "discovery"
+                ],
+                "summary": "Deployment configuration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/v1/documents": {
             "get": {
                 "security": [
@@ -311,12 +331,6 @@ const docTemplate = `{
                         "name": "title",
                         "in": "formData",
                         "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "private|org|link",
-                        "name": "visibility",
-                        "in": "formData"
                     },
                     {
                         "type": "file",
@@ -1312,11 +1326,15 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "user",
-                "service_account"
+                "service_account",
+                "anyone",
+                "anonymous"
             ],
             "x-enum-varnames": [
                 "PrincipalUser",
-                "PrincipalServiceAccount"
+                "PrincipalServiceAccount",
+                "PrincipalAnyone",
+                "PrincipalAnonymous"
             ]
         },
         "repo.Document": {
@@ -1332,9 +1350,6 @@ const docTemplate = `{
                     "$ref": "#/definitions/auth.Principal"
                 },
                 "title": {
-                    "type": "string"
-                },
-                "visibility": {
                     "type": "string"
                 }
             }
@@ -1382,12 +1397,14 @@ const docTemplate = `{
         "repo.Role": {
             "type": "string",
             "enum": [
+                "",
                 "viewer",
                 "commenter",
                 "editor",
                 "owner"
             ],
             "x-enum-varnames": [
+                "RoleNone",
                 "RoleViewer",
                 "RoleCommenter",
                 "RoleEditor",

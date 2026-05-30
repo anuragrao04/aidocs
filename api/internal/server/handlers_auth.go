@@ -213,6 +213,37 @@ func (h handlers) discovery(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"name": "aidocs", "api_version": "v1", "auth": gin.H{"modes": []string{authModeWeb, authModeCLI}}})
 }
 
+// everyoneLabel is the human label for the "anyone" grant on this deployment.
+// Public servers grant anyone with the link; org servers grant the org's
+// members (scoped by the login gate, not the network).
+func everyoneLabel(deployment, orgName string) string {
+	if deployment == DeploymentOrg {
+		if orgName != "" {
+			return "Anyone in " + orgName
+		}
+		return "Anyone in the org"
+	}
+	return "Anyone with the link"
+}
+
+// Config godoc
+// @Summary Deployment configuration
+// @Tags discovery
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /v1/config [get]
+func (h handlers) config(c *gin.Context) {
+	deployment := h.deps.deployment
+	if deployment == "" {
+		deployment = DeploymentPublic
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"deployment":     deployment,
+		"org_name":       h.deps.orgName,
+		"everyone_label": everyoneLabel(deployment, h.deps.orgName),
+	})
+}
+
 // CommitTXT godoc
 // @Summary Build commit SHA
 // @Tags discovery

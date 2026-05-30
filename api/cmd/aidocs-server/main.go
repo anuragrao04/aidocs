@@ -75,13 +75,37 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Deployment type. An org deployment gates Google login to the org's
+	// domains; those domains double as the OAuth allow-list. A public
+	// deployment lets any Google account in (subject to ALLOWED_OAUTH_DOMAINS).
+	deployment := os.Getenv("AIDOCS_DEPLOYMENT")
+	if deployment == "" {
+		deployment = server.DeploymentPublic
+	}
+	orgDomains := splitCSV(os.Getenv("AIDOCS_ORG_DOMAINS"))
+	allowedOAuthDomains := splitCSV(os.Getenv("ALLOWED_OAUTH_DOMAINS"))
+	orgName := os.Getenv("AIDOCS_ORG_NAME")
+	switch deployment {
+	case server.DeploymentPublic:
+	case server.DeploymentOrg:
+		if len(orgDomains) == 0 {
+			log.Fatal("AIDOCS_ORG_DOMAINS is required when AIDOCS_DEPLOYMENT=org")
+		}
+		// On an org deployment the org's domains are the login gate.
+		allowedOAuthDomains = orgDomains
+	default:
+		log.Fatalf("AIDOCS_DEPLOYMENT must be %q or %q (got %q)", server.DeploymentPublic, server.DeploymentOrg, deployment)
+	}
+
 	srv := server.New(server.Config{
 		Environment:         server.EnvProduction,
 		AppOrigin:           appOrigin,
 		RenderOrigin:        renderOrigin,
 		GoogleOAuth:         auth.NewGoogleOAuth(clientID, clientSecret, appOrigin+"/v1/auth/google/callback"),
 		SessionSecret:       sessionSecret,
-		AllowedOAuthDomains: splitCSV(os.Getenv("ALLOWED_OAUTH_DOMAINS")),
+		AllowedOAuthDomains: allowedOAuthDomains,
+		Deployment:          deployment,
+		OrgName:             orgName,
 	},
 		server.WithRepository(store),
 		server.WithAuthenticator(auth.DBAuthenticator{Resolver: store, SessionSecret: sessionSecret}),

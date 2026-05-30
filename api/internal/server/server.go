@@ -20,6 +20,9 @@ type Config struct {
 	GoogleOAuth         auth.GoogleOAuth
 	SessionSecret       string
 	AllowedOAuthDomains []string
+	// Deployment is "public" or "org". OrgName labels the org in UI copy.
+	Deployment string
+	OrgName    string
 }
 
 // Server wraps the gin engine.
@@ -34,6 +37,8 @@ type dependencies struct {
 	appOrigin           string
 	renderOrigin        string
 	allowedOAuthDomains []string
+	deployment          string
+	orgName             string
 }
 
 // Option configures the Server.
@@ -81,6 +86,8 @@ func New(cfg Config, opts ...Option) *Server {
 		appOrigin:           cfg.AppOrigin,
 		renderOrigin:        cfg.RenderOrigin,
 		allowedOAuthDomains: cfg.AllowedOAuthDomains,
+		deployment:          cfg.Deployment,
+		orgName:             cfg.OrgName,
 	}
 	for _, opt := range opts {
 		opt(&deps)
@@ -121,6 +128,7 @@ func (s *Server) routes(deps dependencies) {
 
 	v1 := s.engine.Group("/v1")
 	v1.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	v1.GET("/config", h.config)
 	v1.GET("/auth/google/start", h.googleStart)
 	v1.GET("/auth/google/callback", h.googleCallback)
 	v1.POST("/auth/cli/exchange", h.cliExchange)

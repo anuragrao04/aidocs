@@ -14,11 +14,12 @@ const (
 	authModeCLI = "cli"
 )
 
-// Document visibility values
+// Deployment types. A public deployment lets anyone with a Google account in;
+// an org deployment gates login to the org's domains. The only authz
+// difference is the login gate — the document ACL is identical.
 const (
-	visibilityPrivate = "private"
-	visibilityOrg     = "org"
-	visibilityLink    = "link"
+	DeploymentPublic = "public"
+	DeploymentOrg    = "org"
 )
 
 // Comment / transfer statuses

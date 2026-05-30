@@ -17,10 +17,14 @@ definitions:
     enum:
     - user
     - service_account
+    - anyone
+    - anonymous
     type: string
     x-enum-varnames:
     - PrincipalUser
     - PrincipalServiceAccount
+    - PrincipalAnyone
+    - PrincipalAnonymous
   repo.Document:
     properties:
       current_version_id:
@@ -30,8 +34,6 @@ definitions:
       owner:
         $ref: '#/definitions/auth.Principal'
       title:
-        type: string
-      visibility:
         type: string
     type: object
   repo.Grant:
@@ -62,12 +64,14 @@ definitions:
     type: object
   repo.Role:
     enum:
+    - ""
     - viewer
     - commenter
     - editor
     - owner
     type: string
     x-enum-varnames:
+    - RoleNone
     - RoleViewer
     - RoleCommenter
     - RoleEditor
@@ -260,6 +264,19 @@ paths:
       summary: Start Google OAuth
       tags:
       - auth
+  /v1/config:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Deployment configuration
+      tags:
+      - discovery
   /v1/documents:
     get:
       produces:
@@ -284,10 +301,6 @@ paths:
         in: formData
         name: title
         required: true
-        type: string
-      - description: private|org|link
-        in: formData
-        name: visibility
         type: string
       - description: Single-file HTML
         in: formData

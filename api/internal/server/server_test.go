@@ -55,7 +55,7 @@ func TestAuthFailureMetricIncrements(t *testing.T) {
 
 func TestDocumentCreateMetricsIncrement(t *testing.T) {
 	h := newTestServer()
-	docBefore := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "visibility": "private", "actor_type": "user"})
+	docBefore := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "actor_type": "user"})
 	verBefore := scrapeMetric(t, h, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
 	body, contentType := multipartBody(t, map[string]string{"title": "Metrics doc"}, "file", "doc.html", "<html><body>metrics</body></html>")
 	rr := doRaw(t, h, http.MethodPost, "/v1/documents", body, map[string]string{
@@ -63,7 +63,7 @@ func TestDocumentCreateMetricsIncrement(t *testing.T) {
 		"X-Test-Principal": "user:usr_1:anurag@example.com:Anurag",
 	})
 	assertStatus(t, rr, http.StatusCreated)
-	docAfter := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "visibility": "private", "actor_type": "user"})
+	docAfter := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "actor_type": "user"})
 	verAfter := scrapeMetric(t, h, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
 	if docAfter != docBefore+1 {
 		t.Fatalf("document create counter = %v, want %v", docAfter, docBefore+1)
@@ -134,8 +134,7 @@ func TestMeWithServiceAccountPrincipal(t *testing.T) {
 
 func TestCreateDocument(t *testing.T) {
 	body, contentType := multipartBody(t, map[string]string{
-		"title":      "Q3 business review",
-		"visibility": "private",
+		"title": "Q3 business review",
 	}, "file", "review.html", "<html><body>Hello</body></html>")
 
 	rr := doRaw(t, newTestServer(), http.MethodPost, "/v1/documents", body, map[string]string{
@@ -455,15 +454,6 @@ func TestFrontendFallbackServesEmbeddedIndex(t *testing.T) {
 	}
 }
 
-func TestCreateDocumentRejectsInvalidVisibility(t *testing.T) {
-	body, contentType := multipartBody(t, map[string]string{"title": "Doc", "visibility": "public-internet"}, "file", "doc.html", "<html></html>")
-	rr := doRaw(t, newTestServer(), http.MethodPost, "/v1/documents", body, map[string]string{
-		"Content-Type":     contentType,
-		"X-Test-Principal": "user:usr_1:anurag@example.com:Anurag",
-	})
-	assertStatus(t, rr, http.StatusBadRequest)
-}
-
 func TestGrantPatchIsScopedToDocument(t *testing.T) {
 	h := newTestServer()
 	_ = do(t, h, http.MethodPost, "/v1/documents/doc_1/grants", `{
@@ -479,6 +469,48 @@ func TestGrantPatchIsScopedToDocument(t *testing.T) {
 		"X-Test-Principal": "user:owner_1:owner@example.com:Owner",
 	})
 	assertStatus(t, rr, http.StatusNotFound)
+}
+
+func TestConfigReportsDeploymentWording(t *testing.T) {
+	public := do(t, newTestServer(), http.MethodGet, "/v1/config", "", nil)
+	assertStatus(t, public, http.StatusOK)
+	assertJSON(t, public.Body.Bytes(), `{
+	  "deployment": "public",
+	  "org_name": "",
+	  "everyone_label": "Anyone with the link"
+	}`)
+
+	org := newConfiguredTestServer(server.Config{Environment: "test", Deployment: "org", OrgName: "Acme"})
+	rr := do(t, org, http.MethodGet, "/v1/config", "", nil)
+	assertStatus(t, rr, http.StatusOK)
+	assertJSON(t, rr.Body.Bytes(), `{
+	  "deployment": "org",
+	  "org_name": "Acme",
+	  "everyone_label": "Anyone in Acme"
+	}`)
+}
+
+func TestAnyoneGrantGivesStrangerAccess(t *testing.T) {
+	h := newTestServer()
+	stranger := map[string]string{"X-Test-Principal": "user:usr_stranger:stranger@example.com:Stranger"}
+
+	// Before any "anyone" grant, a stranger cannot see the document.
+	rr := do(t, h, http.MethodGet, "/v1/documents/doc_1", "", stranger)
+	assertStatus(t, rr, http.StatusForbidden)
+
+	// Owner grants the whole-server audience commenter access.
+	rr = do(t, h, http.MethodPost, "/v1/documents/doc_1/grants", `{
+	  "principal": { "type": "anyone" },
+	  "role": "commenter"
+	}`, map[string]string{
+		"Content-Type":     "application/json",
+		"X-Test-Principal": "user:owner_1:owner@example.com:Owner",
+	})
+	assertStatus(t, rr, http.StatusCreated)
+
+	// Now the stranger can view the document and create a comment (commenter).
+	rr = do(t, h, http.MethodGet, "/v1/documents/doc_1", "", stranger)
+	assertStatus(t, rr, http.StatusOK)
 }
 
 func TestUploadRejectsPayloadOver10MiB(t *testing.T) {

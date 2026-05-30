@@ -22,6 +22,11 @@ var (
 )
 
 func resolveGrantPrincipal(c *gin.Context, r repo.Repository, address string, principal auth.Principal) (auth.Principal, error) {
+	// The "anyone" principal is the whole-server audience; it has no address and
+	// no backing record to resolve.
+	if principal.Type == auth.PrincipalAnyone {
+		return auth.Principal{Type: auth.PrincipalAnyone}, nil
+	}
 	if address != "" {
 		_, domain, ok := bots.Split(address)
 		if !ok {
@@ -115,6 +120,9 @@ func (h handlers) createGrant(c *gin.Context) {
 	pr := gin.H{"type": g.Principal.Type, "id": g.Principal.ID}
 	if g.Principal.Email != "" {
 		pr["email"] = g.Principal.Email
+	}
+	if g.Principal.Name != "" {
+		pr["name"] = g.Principal.Name
 	}
 	incGrant("created", string(g.Role), string(g.Principal.Type), actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": g.ID, "resource": gin.H{"type": "document", "id": g.DocumentID}, "principal": pr, "role": g.Role, "granted_by": gin.H{"id": g.GrantedBy.ID, "email": g.GrantedBy.Email}})
