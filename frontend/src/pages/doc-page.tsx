@@ -1,3 +1,4 @@
+import { useTitle } from "@/lib/use-title";
 import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -33,6 +34,7 @@ export function DocumentPage() {
   });
   const [selection, setSelection] = useState<PendingSelection | null>(null);
   const [activeComment, setActiveComment] = useState<string>();
+  useTitle(doc.data ? docTitle(doc.data) : undefined);
 
   const current =
     currentVersionID(doc.data || {}) ||

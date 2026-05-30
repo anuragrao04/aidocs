@@ -1,3 +1,4 @@
+import { useTitle } from "@/lib/use-title";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
@@ -37,6 +38,7 @@ const AGENT_TARGETS = [
 ];
 
 export function StartPage() {
+  useTitle("Get started");
   const { state, setStep, skip } = useOnboarding();
   const config = useQuery({
     queryKey: ["config"],

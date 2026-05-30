@@ -1,3 +1,4 @@
+import { useTitle } from "@/lib/use-title";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -32,6 +33,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { BOT_DOMAIN_SUFFIX } from "@/lib/constants";
 
 export function ServiceAccountsPage() {
+  useTitle("Service accounts");
   const q = useQueryClient();
   const sas = useQuery({
     queryKey: queryKeys.serviceAccounts(),

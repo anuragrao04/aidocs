@@ -1,3 +1,4 @@
+import { useTitle } from "@/lib/use-title";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOnboarding, autoMarkFirstDoc } from "@/lib/onboarding";
@@ -36,6 +37,7 @@ import { api, docID, docTitle, type Document } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
 
 export function DocumentsPage() {
+  useTitle("Documents");
   const docs = useQuery({
     queryKey: queryKeys.documents(),
     queryFn: api.listDocuments,

@@ -1,3 +1,4 @@
+import { useTitle } from "@/lib/use-title";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -28,6 +29,7 @@ const useCases = [
 ];
 
 export function LandingPage() {
+  useTitle();
   return (
     <div className="min-h-full bg-[var(--color-bg)]">
       <Nav />

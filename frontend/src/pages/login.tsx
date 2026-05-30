@@ -1,9 +1,11 @@
+import { useTitle } from "@/lib/use-title";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/api";
 
 export function LoginPage() {
+  useTitle("Sign in");
   const [params] = useSearchParams();
   const next = params.get("next") || "/app/documents";
   const url = api.loginURL(next);

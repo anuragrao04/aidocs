@@ -1,3 +1,4 @@
+import { useTitle } from "@/lib/use-title";
 import { LogOut, Monitor, Moon, Sun } from "lucide-react";
 import { Avatar, Center, Skeleton } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/cn";
 
 export function ProfilePage() {
+  useTitle("Profile");
   const me = useMe();
   const { theme, setTheme } = useTheme();
   const user = me.data?.user || me.data?.principal;

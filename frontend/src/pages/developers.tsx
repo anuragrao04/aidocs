@@ -1,3 +1,4 @@
+import { useTitle } from "@/lib/use-title";
 import { Bot, ExternalLink, KeyRound, Rocket } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { CodeBlock } from "@/components/ui/misc";
 import { publicURL } from "@/lib/config";
 
 export function DevelopersPage() {
+  useTitle("Developers");
   const url = publicURL();
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
