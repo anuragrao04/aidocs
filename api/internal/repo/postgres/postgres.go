@@ -562,10 +562,10 @@ func (s *Store) AcceptOwnershipTransfer(ctx context.Context, id string, user aut
 	}
 	x := repo.OwnershipTransfer{ID: r.ID, ServiceAccountID: r.ServiceAccountID, FromUserID: r.FromUserID, ToUserID: r.ToUserID, Status: r.Status}
 	if x.ToUserID != user.ID {
-		return x, errors.New("not target")
+		return x, repo.ErrNotTransferTarget
 	}
 	if x.Status != repo.StatusPending {
-		return x, errors.New("transfer not pending")
+		return x, repo.ErrTransferNotPending
 	}
 	if err := q.UpdateServiceAccountOwner(ctx, dbsqlc.UpdateServiceAccountOwnerParams{OwnerUserID: user.ID, ID: x.ServiceAccountID}); err != nil {
 		return x, err

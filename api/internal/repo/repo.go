@@ -24,6 +24,13 @@ const (
 var ErrNotFound = fmt.Errorf("not found: %w", auth.ErrNotFound)
 var ErrConflict = errors.New("conflict")
 
+// Ownership-transfer state errors, shared by all repository implementations so
+// handlers can map them to responses without matching on message text.
+var (
+	ErrNotTransferTarget  = errors.New("not transfer target")
+	ErrTransferNotPending = errors.New("transfer not pending")
+)
+
 // ErrVersionConflict indicates an optimistic-concurrency failure when creating
 // a new version: the supplied base_version_id is stale. The concrete error
 // returned is a *VersionConflictError carrying the latest version id; callers
@@ -391,15 +398,11 @@ func (m *Memory) CreateVersion(ctx context.Context, documentID, baseVersionID, c
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	d, ok := m.docs[documentID]
-	if !ok && documentID == "doc_1" {
-		d = Document{ID: "doc_1", CurrentVersionID: "ver_1"}
-		ok = true
-	}
 	if !ok {
 		return Version{}, ErrNotFound
 	}
 	if baseVersionID != d.CurrentVersionID {
-		return Version{ID: d.CurrentVersionID}, &VersionConflictError{LatestVersionID: d.CurrentVersionID}
+		return Version{}, &VersionConflictError{LatestVersionID: d.CurrentVersionID}
 	}
 	m.verN++
 	v := Version{ID: fmt.Sprintf("ver_%d", m.verN), Number: m.verN, DocumentID: documentID, CreatedBy: createdBy, ChangeSummary: changeSummary, SHA256: fmt.Sprintf("sha_%d", m.verN)}
@@ -465,7 +468,20 @@ func (m *Memory) ListServiceAccounts(ctx context.Context, owner auth.Principal) 
 	return []ServiceAccount{}, nil
 }
 func (m *Memory) UpdateServiceAccount(ctx context.Context, id, name string, disabled *bool) (ServiceAccount, error) {
-	return ServiceAccount{ID: id, Name: name, Disabled: disabled != nil && *disabled}, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	sa, ok := m.sas[id]
+	if !ok {
+		return ServiceAccount{}, ErrNotFound
+	}
+	if name != "" {
+		sa.Name = name
+	}
+	if disabled != nil {
+		sa.Disabled = *disabled
+	}
+	m.sas[id] = sa
+	return sa, nil
 }
 func (m *Memory) CreateServiceAccountKey(ctx context.Context, saID, name, tokenHash string) (string, error) {
 	m.mu.Lock()
@@ -581,8 +597,14 @@ func (m *Memory) AcceptOwnershipTransfer(ctx context.Context, id string, user au
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	x, ok := m.transfers[id]
-	if !ok || x.ToUserID != user.ID || x.Status != StatusPending {
-		return x, errors.New("not allowed")
+	if !ok {
+		return OwnershipTransfer{}, ErrNotFound
+	}
+	if x.ToUserID != user.ID {
+		return x, ErrNotTransferTarget
+	}
+	if x.Status != StatusPending {
+		return x, ErrTransferNotPending
 	}
 	x.Status = StatusAccepted
 	m.transfers[id] = x
