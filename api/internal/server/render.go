@@ -50,9 +50,3 @@ func htmlEscapeAttr(s string) string {
 	s = strings.ReplaceAll(s, ">", "&gt;")
 	return s
 }
-
-// jsString JSON-encodes a string for safe embedding inside a JS expression.
-func jsString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
-}

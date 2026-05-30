@@ -20,8 +20,6 @@ func forbidden(c *gin.Context, msg string) {
 }
 
 // internalErr logs err (if non-nil) and writes a 500 response.
-// Use this for all internal errors; the no-arg internal() helper has been
-// removed (server-08) so callers must always provide the error for logging.
 func internalErr(c *gin.Context, err error) {
 	if err != nil {
 		log.Printf("internal error method=%s path=%s error=%v", c.Request.Method, c.Request.URL.Path, err)

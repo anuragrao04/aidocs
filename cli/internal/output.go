@@ -63,7 +63,7 @@ func printPushedVersion(out io.Writer, g *globals, docID, server string, b []byt
 		return render(out, g, b)
 	}
 	m["document_id"] = docID
-	m["url"] = strings.TrimRight(server, "/") + "/documents/" + docID
+	m["url"] = browserURL(server, "/documents/%s", docID)
 	fmt.Fprintln(out, compactRow(m))
 	return nil
 }
@@ -120,39 +120,13 @@ func mergeMaps(a, b map[string]any) map[string]any {
 	return r
 }
 
-// value looks up key in m, tolerating both snake_case (API JSON) and the
-// Go-style CamelCase keys that arise when structs are marshalled without tags.
+// value looks up a snake_case key in m, returning nil if m is nil or the key
+// is absent.
 func value(m map[string]any, key string) any {
 	if m == nil {
 		return nil
 	}
-	if v, ok := m[key]; ok {
-		return v
-	}
-	if key == "id" {
-		if v, ok := m["ID"]; ok {
-			return v
-		}
-	}
-	if strings.HasSuffix(key, "_id") {
-		camelID := strings.TrimSuffix(key, "_id") + "_ID"
-		parts := strings.Split(camelID, "_")
-		for i, p := range parts {
-			if p != "" {
-				parts[i] = strings.ToUpper(p[:1]) + p[1:]
-			}
-		}
-		if v, ok := m[strings.Join(parts, "")]; ok {
-			return v
-		}
-	}
-	parts := strings.Split(key, "_")
-	for i, p := range parts {
-		if p != "" {
-			parts[i] = strings.ToUpper(p[:1]) + p[1:]
-		}
-	}
-	return m[strings.Join(parts, "")]
+	return m[key]
 }
 
 // compactRow renders a resource map as an ordered key=value line using the

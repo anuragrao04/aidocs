@@ -274,9 +274,9 @@ function Step({
 }
 
 function AgentConfigure() {
-  // `--all` installs the skill across every coding agent found on the machine,
-  // so the command is the same regardless of which agent you use. The chips
-  // below are a static compatibility list, not a selector (web-04).
+  // `--all` installs the skill across every coding agent on the machine, so the
+  // command is the same regardless of agent. The chips below are a static
+  // compatibility list, not a selector.
   const cmd = `npx skills add ${SKILL_REPO} -s aidocs --all`;
   return (
     <div>

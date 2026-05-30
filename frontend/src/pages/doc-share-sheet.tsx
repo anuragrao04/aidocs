@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import { api } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
-import { ROLES } from "@/lib/constants";
+import { ROLES, DEFAULT_ROLE } from "@/lib/constants";
 
 export function ShareSheet({ docId }: { docId: string }) {
   const q = useQueryClient();
@@ -22,7 +22,7 @@ export function ShareSheet({ docId }: { docId: string }) {
     queryFn: () => api.listGrants(docId),
   });
   const [address, setAddress] = useState("");
-  const [role, setRole] = useState("commenter");
+  const [role, setRole] = useState(DEFAULT_ROLE);
   const m = useMutation({
     mutationFn: () => api.createGrant(docId, address.trim(), role),
     onSuccess: () => {

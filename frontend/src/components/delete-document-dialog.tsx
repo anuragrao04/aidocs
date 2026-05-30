@@ -10,8 +10,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Shared delete-document confirmation, used from the documents table row and
-// the document toolbar dropdown (web-08).
+// Delete-document confirmation shared by the documents table row and the
+// document toolbar dropdown.
 export function DeleteDocumentDialog({
   title,
   trigger,

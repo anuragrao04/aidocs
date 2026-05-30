@@ -14,7 +14,7 @@ import (
 func docsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "docs", Short: "Manage documents"}
 	var title, vis string
-	create := &cobra.Command{Use: "create <file>", Short: "Create a document from an HTML file", Example: "  aidocs docs create report.html --title 'Report' --visibility private", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	create := &cobra.Command{Use: "create <file>", Short: "Create a document from an HTML file", Example: "  aidocs docs create report.html --title 'Report' --visibility private", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		data, fn, err := readFileArg(args[0])
 		if err != nil {
 			return err
@@ -29,7 +29,7 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 	create.Flags().StringVar(&title, "title", "", "document title (defaults to the file name)")
 	create.Flags().StringVar(&vis, "visibility", "private", "document visibility: private or public")
 	var ut, uv string
-	update := &cobra.Command{Use: "update <doc_id>", Short: "Update document metadata", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	update := &cobra.Command{Use: "update <doc_id>", Short: "Update document metadata", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		body := map[string]any{}
 		if cmd.Flags().Changed("title") {
 			body["title"] = ut
@@ -57,7 +57,7 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 			"Examples:\n" +
 			"  aidocs grants add doc_… --to anurag@razorpay.com --role commenter\n" +
 			"  aidocs grants add doc_… --to n8n-prod@brave.otter.bot --role editor",
-		Args: cobra.ExactArgs(1),
+		Args: exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{"role": role}
 			switch {
@@ -77,13 +77,13 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 	add.Flags().StringVar(&principal, "principal", "", "legacy: sa:<id> or user:<email>")
 	add.Flags().StringVar(&role, "role", "viewer", "viewer, commenter, editor, or owner")
 	var r string
-	upd := &cobra.Command{Use: "update <doc_id> <grant_id>", Short: "Update a grant role", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	upd := &cobra.Command{Use: "update <doc_id> <grant_id>", Short: "Update a grant role", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.json("PATCH", apiPath("/v1/documents/%s/grants/%s", args[0], args[1]), map[string]any{"role": r})
 		})
 	}}
 	upd.Flags().StringVar(&r, "role", "viewer", "new grant role: viewer, commenter, editor, or owner")
-	revoke := &cobra.Command{Use: "revoke <doc_id> <grant_id>", Short: "Revoke a document grant", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	revoke := &cobra.Command{Use: "revoke <doc_id> <grant_id>", Short: "Revoke a document grant", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.do("DELETE", apiPath("/v1/documents/%s/grants/%s", args[0], args[1]), nil, "")
 		})
@@ -100,7 +100,7 @@ func versionsCmd(g *globals, out io.Writer) *cobra.Command {
 
 func pullCmd(g *globals, out io.Writer) *cobra.Command {
 	var ver, outp string
-	cmd := &cobra.Command{Use: "pull <doc_id>", Short: "Download a document HTML version", Example: "  aidocs docs pull doc_123 --out report.html\n  aidocs docs pull doc_123 --version ver_123", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Use: "pull <doc_id>", Short: "Download a document HTML version", Example: "  aidocs docs pull doc_123 --out report.html\n  aidocs docs pull doc_123 --version ver_123", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := client(g)
 		if err != nil {
 			return err
@@ -154,7 +154,7 @@ func docsPushCmd(g *globals, out io.Writer) *cobra.Command {
 // argument validation is not coupled to the help text.
 func pushVersionCmd(g *globals, out io.Writer, use, short, example string, argc int, resolve func([]string) (string, string, error)) *cobra.Command {
 	var base, summary string
-	cmd := &cobra.Command{Use: use, Short: short, Example: example, Args: cobra.ExactArgs(argc), RunE: func(cmd *cobra.Command, args []string) error {
+	cmd := &cobra.Command{Use: use, Short: short, Example: example, Args: exactArgs(argc), RunE: func(cmd *cobra.Command, args []string) error {
 		doc, file, err := resolve(args)
 		if err != nil {
 			return err
@@ -189,7 +189,7 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "comments", Short: "Manage document review comments"}
 
 	var listStatus, listVersion string
-	list := &cobra.Command{Use: "list <doc_id>", Short: "List document comments", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	list := &cobra.Command{Use: "list <doc_id>", Short: "List document comments", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		q := url.Values{}
 		if listStatus != "" {
 			q.Set("status", listStatus)
@@ -209,7 +209,7 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 	list.Flags().StringVar(&listVersion, "version", "", "filter by version ID")
 
 	var createBody, createQuote, createPrefix, createSuffix, createVersion string
-	create := &cobra.Command{Use: "create <doc_id>", Short: "Create a document comment", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	create := &cobra.Command{Use: "create <doc_id>", Short: "Create a document comment", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.json("POST", apiPath("/v1/documents/%s/comments", args[0]), map[string]any{"body": createBody, "version_id": createVersion, "anchor": map[string]any{"quote": createQuote, "prefix": createPrefix, "suffix": createSuffix}})
 		})
@@ -221,7 +221,7 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 	create.Flags().StringVar(&createVersion, "version", "", "version ID the comment anchors to")
 
 	var updateBody, updateStatus string
-	update := &cobra.Command{Use: "update <doc_id> <comment_id>", Short: "Update a document comment", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	update := &cobra.Command{Use: "update <doc_id> <comment_id>", Short: "Update a document comment", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.json("PATCH", apiPath("/v1/documents/%s/comments/%s", args[0], args[1]), map[string]any{"body": updateBody, "status": updateStatus})
 		})
@@ -234,7 +234,7 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 }
 
 func deleteCommentCmd(g *globals, out io.Writer) *cobra.Command {
-	return &cobra.Command{Use: "delete <doc_id> <comment_id>", Short: "Delete a document comment", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: "delete <doc_id> <comment_id>", Short: "Delete a document comment", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.do("DELETE", apiPath("/v1/documents/%s/comments/%s", args[0], args[1]), nil, "")
 		})
@@ -246,7 +246,7 @@ func resolveCmd(g *globals, out io.Writer, name, status string) *cobra.Command {
 	if status == "open" {
 		short = "Reopen document comments"
 	}
-	return &cobra.Command{Use: name + " <doc_id> <comment_id>...", Short: short, Args: cobra.MinimumNArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: name + " <doc_id> <comment_id>...", Short: short, Args: minArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := client(g)
 		if err != nil {
 			return err
@@ -266,12 +266,12 @@ func resolveCmd(g *globals, out io.Writer, name, status string) *cobra.Command {
 }
 
 func openCmd(g *globals, out io.Writer) *cobra.Command {
-	return &cobra.Command{Use: "open <doc_id>", Short: "Open a document in the browser", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: "open <doc_id>", Short: "Open a document in the browser", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client(g)
 		if err != nil {
 			return err
 		}
-		u := c.Base + "/documents/" + args[0]
+		u := browserURL(c.Base, "/documents/%s", args[0])
 		message(out, g, u)
 		return openBrowserErr(u)
 	}}

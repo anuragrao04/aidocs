@@ -352,8 +352,8 @@ function NewBotDialog({
   const label = at >= 0 ? trimmed.slice(0, at) : trimmed;
   const domain = at >= 0 ? trimmed.slice(at + 1) : "";
   const hasDomain = at >= 0;
-  // The server is authoritative for address validation; this is a lightweight
-  // inline hint mirroring its `.bot` rule (web-18).
+  // Lightweight inline hint mirroring the server's `.bot` address rule; the
+  // server remains authoritative.
   const domainLooksValid = !hasDomain || domain.endsWith(BOT_DOMAIN_SUFFIX);
   const create = useMutation({
     mutationFn: () =>

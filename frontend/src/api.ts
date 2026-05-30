@@ -64,28 +64,6 @@ export class APIError extends Error {
   }
 }
 
-// API responses mix PascalCase (Go struct JSON) and snake_case across
-// endpoints. Normalize every response to a single snake_case shape so call
-// sites never need `d.id || d.ID` style fallbacks (web-02/web-03).
-function toSnakeKey(key: string): string {
-  return key
-    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .toLowerCase();
-}
-
-function normalizeKeys(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(normalizeKeys);
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      out[toSnakeKey(k)] = normalizeKeys(v);
-    }
-    return out;
-  }
-  return value;
-}
-
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
     credentials: "include",
@@ -110,7 +88,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (res.status === 204) return undefined as T;
   const ct = res.headers.get("content-type") || "";
   if (ct.includes("application/json")) {
-    return normalizeKeys(await res.json()) as T;
+    return (await res.json()) as T;
   }
   return (await res.text()) as T;
 }
@@ -169,9 +147,8 @@ export const api = {
       body: JSON.stringify({
         version_id: version,
         body,
-        // Prefer a real anchor captured from the render bridge; fall back to a
-        // best-effort placeholder when the bridge did not supply selection
-        // offsets. See web-12 and the iframe-bridge contract (server-07).
+        // Use the anchor captured from the render bridge, falling back to a
+        // placeholder when the bridge supplied no selection offsets.
         anchor: {
           quote,
           prefix: anchor?.prefix ?? "",

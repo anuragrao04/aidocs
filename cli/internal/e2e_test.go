@@ -171,8 +171,11 @@ func TestExitCodeMapping(t *testing.T) {
 			t.Fatalf("status %d got %d want %d", tc.status, got, tc.want)
 		}
 	}
-	if got := ExitCode(fmt.Errorf("unknown flag: --wat")); got != 2 {
-		t.Fatalf("usage got %d", got)
+	if got := ExitCode(usageError{fmt.Errorf("unknown flag: --wat")}); got != 2 {
+		t.Fatalf("usage error got %d", got)
+	}
+	if got := ExitCode(fmt.Errorf(`unknown command "wat" for "aidocs"`)); got != 2 {
+		t.Fatalf("unknown command got %d", got)
 	}
 }
 

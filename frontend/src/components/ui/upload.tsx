@@ -1,8 +1,8 @@
 import * as React from "react";
 import { useState } from "react";
 
-// Shared HTML-file picking primitives so the backup-document and
-// new-version upload forms don't duplicate file state + markup (web-09).
+// HTML-file picking primitives shared by the backup-document and new-version
+// upload forms.
 export function useStagedFile() {
   const [file, setFile] = useState<File | null>(null);
   return { file, setFile, reset: () => setFile(null) };

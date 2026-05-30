@@ -1,5 +1,5 @@
-// Centralized React Query key factory so keys stay consistent and
-// invalidations line up by prefix (web-16).
+// React Query key factory. Keys share prefixes so related queries invalidate
+// together.
 export const queryKeys = {
   me: () => ["me"] as const,
   documents: () => ["documents"] as const,

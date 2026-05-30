@@ -34,7 +34,7 @@ import { HtmlFileInput, useStagedFile } from "@/components/ui/upload";
 import { DeleteDocumentDialog } from "@/components/delete-document-dialog";
 import { api, docID, docTitle, type Document } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
-import { VISIBILITIES } from "@/lib/constants";
+import { VISIBILITIES, DEFAULT_VISIBILITY } from "@/lib/constants";
 
 export function DocumentsPage() {
   const docs = useQuery({
@@ -169,7 +169,7 @@ function DocRow({ doc }: { doc: Document }) {
       </td>
       <td className="px-4 py-3">
         <Badge variant="muted">
-          {(doc.visibility || "private").toLowerCase()}
+          {(doc.visibility || DEFAULT_VISIBILITY).toLowerCase()}
         </Badge>
       </td>
       <td className="px-2 py-3">
@@ -249,7 +249,7 @@ function UploadBackupDialog({ trigger }: { trigger: React.ReactNode }) {
   const q = useQueryClient();
   const nav = useNavigate();
   const [title, setTitle] = useState("");
-  const [visibility, setVisibility] = useState("private");
+  const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
   const { file, setFile, reset } = useStagedFile();
   const [open, setOpen] = useState(false);
   const m = useMutation({

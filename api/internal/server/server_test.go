@@ -633,7 +633,6 @@ func (r *contextCheckingRepo) ListDocuments(ctx context.Context, p auth.Principa
 	return r.Memory.ListDocuments(ctx, p)
 }
 
-
 func do(t *testing.T, h http.Handler, method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	return doRaw(t, h, method, path, strings.NewReader(body), headers)

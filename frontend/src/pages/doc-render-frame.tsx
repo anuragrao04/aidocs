@@ -5,9 +5,9 @@ import { queryKeys } from "@/lib/queryKeys";
 import { Center } from "@/components/ui/misc";
 import { useDoc } from "./doc-context";
 
-// Renders the sandboxed document iframe and exchanges selection/paint messages
-// with the in-iframe bridge. Origin is validated on both ends (web-01) and
-// paint flows through a single ready-driven path (web-06).
+// Renders the sandboxed document iframe and exchanges selection and paint
+// messages with the in-iframe bridge. Message origins are validated on both
+// ends, and painting is driven by the bridge's ready signal.
 export function RenderFrame() {
   const { version, comments, activeComment, setSelection } = useDoc();
   const ref = useRef<HTMLIFrameElement>(null);

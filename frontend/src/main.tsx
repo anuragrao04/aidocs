@@ -33,9 +33,8 @@ function errorMessage(e: unknown): string {
   return "Something went wrong.";
 }
 
-// Single source of error UX: queries surface failures (other than auth, which
-// is handled by route guards) and any mutation without its own onError falls
-// back to a toast (web-15, web-22).
+// Query failures (other than auth, handled by route guards) and any mutation
+// without its own onError surface as a toast.
 const qc = new QueryClient({
   defaultOptions: {
     queries: { refetchOnWindowFocus: false },

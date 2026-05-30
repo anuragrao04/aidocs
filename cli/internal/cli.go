@@ -58,6 +58,20 @@ func NewRoot(out io.Writer) *cobra.Command {
 	return root
 }
 
+// exactArgs and minArgs validate the positional argument count and report a
+// usageError (exit code 2) when it is wrong.
+func exactArgs(n int) cobra.PositionalArgs { return wrapArgs(cobra.ExactArgs(n)) }
+func minArgs(n int) cobra.PositionalArgs   { return wrapArgs(cobra.MinimumNArgs(n)) }
+
+func wrapArgs(v cobra.PositionalArgs) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if err := v(cmd, args); err != nil {
+			return usageError{err}
+		}
+		return nil
+	}
+}
+
 // run is the shared command body: build a client, perform the call, then render
 // the response through the single output path.
 func run(g *globals, out io.Writer, fn func(*Client) ([]byte, error)) error {
@@ -99,14 +113,10 @@ func ExitCode(err error) int {
 	if errors.Is(err, errSADisabled) {
 		return 2
 	}
-	// Fallback for cobra-generated usage errors (unknown command / argument
-	// arity) that are not routed through SetFlagErrorFunc. Checked last and
-	// only after typed API errors, so API messages cannot trigger it.
-	msg := err.Error()
-	for _, s := range []string{"unknown command", "unknown flag", "unknown shorthand", "arg(s)", "requires at least", "requires at most", "accepts "} {
-		if strings.Contains(msg, s) {
-			return 2
-		}
+	// An unknown subcommand is also a usage error. Cobra reports it without a
+	// distinct error type, so it is matched on the message here.
+	if strings.Contains(err.Error(), "unknown command") {
+		return 2
 	}
 	return 1
 }
@@ -114,7 +124,7 @@ func ExitCode(err error) int {
 // simple builds a GET/DELETE-style command that takes a fixed arg count and
 // posts no body.
 func simple(g *globals, out io.Writer, use, method, path string, n int) *cobra.Command {
-	return &cobra.Command{Use: use, Short: shortFor(use), Args: cobra.ExactArgs(n), RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: use, Short: shortFor(use), Args: exactArgs(n), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.do(method, path, nil, "")
 		})
@@ -123,7 +133,7 @@ func simple(g *globals, out io.Writer, use, method, path string, n int) *cobra.C
 
 // simplePath builds a single-id command whose path template has one %s.
 func simplePath(g *globals, out io.Writer, use, method, tmpl string) *cobra.Command {
-	return &cobra.Command{Use: use + " <id>", Short: shortFor(use), Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	return &cobra.Command{Use: use + " <id>", Short: shortFor(use), Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.do(method, apiPath(tmpl, args[0]), nil, "")
 		})
@@ -172,11 +182,11 @@ func normalizeServer(s string) string {
 
 func readFileArg(p string) ([]byte, string, error) {
 	if p == "-" {
-		b, e := io.ReadAll(os.Stdin)
-		return b, "stdin.html", e
+		b, err := io.ReadAll(os.Stdin)
+		return b, "stdin.html", err
 	}
-	b, e := os.ReadFile(p)
-	return b, filepath.Base(p), e
+	b, err := os.ReadFile(p)
+	return b, filepath.Base(p), err
 }
 
 func randomToken(n int) string {

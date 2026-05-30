@@ -24,8 +24,8 @@ export function DocumentPage() {
     queryKey: queryKeys.versions(id),
     queryFn: () => api.listVersions(id),
   });
-  // One shared comments query for both the paint overlay and the side panel
-  // so the two can never desync (web-07).
+  // One comments query feeds both the paint overlay and the side panel so they
+  // stay in sync.
   const comments = useQuery({
     queryKey: queryKeys.comments(id),
     queryFn: () => api.listComments(id),

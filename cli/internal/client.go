@@ -135,3 +135,9 @@ func apiPath(format string, ids ...string) string {
 	}
 	return fmt.Sprintf(format, esc...)
 }
+
+// browserURL builds an absolute URL from a server base and a path template,
+// URL-escaping every ID segment.
+func browserURL(base, format string, ids ...string) string {
+	return strings.TrimRight(base, "/") + apiPath(format, ids...)
+}

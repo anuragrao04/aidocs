@@ -13,11 +13,11 @@ const (
 )
 
 type Principal struct {
-	Type       PrincipalType
-	ID         string
-	Email      string
-	Name       string
-	PictureURL string
+	Type       PrincipalType `json:"type"`
+	ID         string        `json:"id"`
+	Email      string        `json:"email,omitempty"`
+	Name       string        `json:"name,omitempty"`
+	PictureURL string        `json:"picture_url,omitempty"`
 }
 
 type Authenticator interface {

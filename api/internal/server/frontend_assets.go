@@ -64,8 +64,8 @@ func registerFrontendRoutes(r *gin.Engine, publicURL string) {
 	})
 }
 
-// subOrSelf returns a sub-filesystem rooted at dir, or falls back to fsys
-// with a log warning if the subdirectory does not exist. (server-15)
+// subOrSelf returns a sub-filesystem rooted at dir. If dir does not exist it
+// logs a warning and returns fsys unchanged.
 func subOrSelf(fsys fs.FS, dir string) fs.FS {
 	sub, err := fs.Sub(fsys, dir)
 	if err != nil {

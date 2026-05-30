@@ -53,16 +53,16 @@ func WithStateStore(st auth.LoginStateStore) Option {
 	return func(d *dependencies) { d.stateStore = st }
 }
 
-// denyAllAuthenticator rejects every request. Used as the default so that
-// forgetting WithAuthenticator causes an obvious auth failure at runtime
-// rather than a silent in-memory / header-bypass auth path. (server-04)
+// denyAllAuthenticator rejects every request. It is the default authenticator,
+// so a server constructed without WithAuthenticator denies all requests instead
+// of silently trusting them.
 type denyAllAuthenticator struct{}
 
 func (denyAllAuthenticator) Authenticate(_ *http.Request) (*auth.Principal, error) {
 	return nil, auth.ErrUnauthorized
 }
 
-// logFormatter formats gin access-log lines. (server-19)
+// logFormatter formats a single gin access-log line.
 func logFormatter(param gin.LogFormatterParams) string {
 	return param.TimeStamp.Format(time.RFC3339) + " " +
 		param.Method + " " +
@@ -72,24 +72,31 @@ func logFormatter(param gin.LogFormatterParams) string {
 		param.Latency.String() + "\n"
 }
 
-// New constructs and returns a configured Server. Required dependencies
-// (authenticator, repository) default to safe stubs so tests that omit them
-// still compile; production callers must always provide real implementations
-// via WithAuthenticator / WithRepository. (server-04)
+// New constructs and returns a configured Server. The authenticator defaults to
+// one that denies every request, and a repository must be supplied via
+// WithRepository outside of tests.
 func New(cfg Config, opts ...Option) *Server {
 	gin.SetMode(gin.ReleaseMode)
 	deps := dependencies{
-		authenticator: denyAllAuthenticator{},
-		repository:    repo.NewMemory(),
-		stateStore:    auth.NewStateStore(),
-		googleOAuth:   cfg.GoogleOAuth,
-		sessionSecret: cfg.SessionSecret,
-		appOrigin:     cfg.AppOrigin,
-		renderOrigin:  cfg.RenderOrigin,
+		authenticator:       denyAllAuthenticator{},
+		stateStore:          auth.NewStateStore(),
+		googleOAuth:         cfg.GoogleOAuth,
+		sessionSecret:       cfg.SessionSecret,
+		appOrigin:           cfg.AppOrigin,
+		renderOrigin:        cfg.RenderOrigin,
 		allowedOAuthDomains: cfg.AllowedOAuthDomains,
 	}
 	for _, opt := range opts {
 		opt(&deps)
+	}
+	// Outside tests a repository is mandatory; falling back to an in-memory
+	// store would silently discard data on restart.
+	if deps.repository == nil {
+		if cfg.Environment == envTest {
+			deps.repository = repo.NewMemory()
+		} else {
+			panic("server.New: repository is required (use server.WithRepository)")
+		}
 	}
 	r := gin.New()
 	r.RedirectTrailingSlash = false
@@ -121,7 +128,7 @@ func (s *Server) routes(deps dependencies) {
 	v1.GET("/auth/google/callback", h.googleCallback)
 	v1.POST("/auth/cli/exchange", h.cliExchange)
 
-	// All routes below require authentication. (server-05)
+	// Every route below requires authentication.
 	authed := v1.Group("", requireAuth(deps.authenticator))
 	authed.GET("/me", h.me)
 	authed.GET("/auth/cli/credentials", h.listCLICredentials)
@@ -225,7 +232,7 @@ func (h handlers) googleCallback(c *gin.Context) {
 		c.JSON(http.StatusForbidden, errorResponse("forbidden", "google account domain is not allowed", nil))
 		return
 	}
-	uid := "usr_google_" + gu.Sub
+	uid := googleUserIDPrefix + gu.Sub
 	p, err := h.deps.repository.UpsertGoogleUser(c.Request.Context(), uid, gu.Email, gu.Name, gu.Sub, gu.PictureURL)
 	if err != nil {
 		internalErr(c, err)
@@ -343,7 +350,7 @@ func (h handlers) revokeCLICredential(c *gin.Context) {
 
 func (h handlers) setSessionCookie(c *gin.Context, p auth.Principal) {
 	cookie := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).Sign(p.ID)
-	// Secure=true only in production; plain http loopback needs Secure=false. (server-12)
+	// The Secure flag is set only in production; local http logins need it off.
 	secure := h.deps.appOrigin != "" && strings.HasPrefix(h.deps.appOrigin, "https://")
 	c.SetCookie(sessionCookieName, cookie, sessionTTLSeconds, "/", "", secure, true)
 }
@@ -455,9 +462,9 @@ func (h handlers) createDocument(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"id": d.ID, "current_version_id": d.CurrentVersionID})
 }
 
-// allocateServiceAccountName tries to find an unused bot name by generating
-// random domains. It returns the ServiceAccount on success, or the last error
-// on permanent failure. (server-09)
+// allocateServiceAccountName creates a service account, retrying with freshly
+// generated random domains until it finds an unused name. It returns the
+// created account, or the last error if every attempt collides.
 func allocateServiceAccountName(c *gin.Context, r repo.Repository, p auth.Principal, label, explicitDomain string) (repo.ServiceAccount, string, error) {
 	explicit := explicitDomain != ""
 	attempts := saNameMaxAttempts
@@ -552,8 +559,8 @@ func (h handlers) createServiceAccount(c *gin.Context) {
 	})
 }
 
-// resolveGrantPrincipal resolves an address or inline principal spec to a
-// concrete auth.Principal. (server-10)
+// resolveGrantPrincipal turns a grant request's address or inline principal
+// spec into a concrete auth.Principal.
 func resolveGrantPrincipal(c *gin.Context, r repo.Repository, address string, principal auth.Principal) (auth.Principal, error) {
 	if address != "" {
 		_, domain, ok := bots.Split(address)
@@ -686,7 +693,7 @@ func (h handlers) createVersion(c *gin.Context) {
 	observeHTML("version_create", len(html))
 	v, err := h.deps.repository.CreateVersion(c.Request.Context(), c.Param("id"), c.PostForm("base_version_id"), c.PostForm("change_summary"), html, *p)
 	if err != nil {
-		// Use errors.Is/As for version conflict (server-01, server-02).
+		// A conflict means the base version was stale; report the current one.
 		if errors.Is(err, repo.ErrVersionConflict) {
 			var vce *repo.VersionConflictError
 			latestID := v.ID // fallback: still populated by Memory/Postgres
@@ -1406,113 +1413,3 @@ func readMultipartFile(c *gin.Context, field string) ([]byte, error) {
 	}
 	return b, nil
 }
-
-func atLeast(have repo.Role, need repo.Role) bool {
-	rank := map[repo.Role]int{repo.RoleViewer: 1, repo.RoleCommenter: 2, repo.RoleEditor: 3, repo.RoleOwner: 4}
-	return rank[have] >= rank[need]
-}
-
-func safeWebRedirect(redirect string) bool {
-	if redirect == "" {
-		return true
-	}
-	if strings.HasPrefix(redirect, "/") && !strings.HasPrefix(redirect, "//") {
-		return true
-	}
-	u, err := url.Parse(redirect)
-	return err == nil && u.Scheme == "" && u.Host == ""
-}
-
-func validGrantRole(role repo.Role) bool {
-	return role == repo.RoleViewer || role == repo.RoleCommenter || role == repo.RoleEditor
-}
-
-func validVisibility(v string) bool {
-	return v == visibilityPrivate || v == visibilityOrg || v == visibilityLink
-}
-
-func hostMatchesOrigin(host, origin string) bool {
-	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" {
-		return false
-	}
-	return strings.EqualFold(host, u.Host)
-}
-
-func emailDomainAllowed(email string, allowed []string) bool {
-	if len(allowed) == 0 {
-		return true
-	}
-	at := strings.LastIndex(email, "@")
-	if at < 0 || at == len(email)-1 {
-		return false
-	}
-	domain := strings.ToLower(email[at+1:])
-	for _, d := range allowed {
-		if strings.EqualFold(domain, strings.TrimSpace(d)) {
-			return true
-		}
-	}
-	return false
-}
-
-func commentsJSON(items []repo.Comment, placementVersionID string, placementHTML []byte) []gin.H {
-	out := make([]gin.H, 0, len(items))
-	for _, cm := range items {
-		out = append(out, commentJSON(cm, placementVersionID, placementHTML))
-	}
-	return out
-}
-
-// commentPlacement computes the placement status and confidence for a comment
-// relative to the given version. (server-17)
-func commentPlacement(cm repo.Comment, placementVersionID string, placementHTML []byte) (status string, confidence float64, matched string) {
-	status = "attached"
-	confidence = 1.0
-	matched = cm.SelectedText
-	if placementVersionID != cm.VersionID && len(placementHTML) > 0 && !strings.Contains(string(placementHTML), cm.SelectedText) {
-		status = "orphaned"
-		confidence = 0
-		matched = ""
-	}
-	return
-}
-
-func principalJSON(p auth.Principal) gin.H {
-	out := gin.H{"type": p.Type, "id": p.ID}
-	if p.Email != "" {
-		out["email"] = p.Email
-	}
-	if p.Name != "" {
-		out["name"] = p.Name
-	}
-	if p.PictureURL != "" {
-		out["picture_url"] = p.PictureURL
-	}
-	return out
-}
-
-func commentJSON(cm repo.Comment, placementVersionID string, placementHTML []byte) gin.H {
-	if placementVersionID == "" {
-		placementVersionID = cm.VersionID
-	}
-	status, confidence, matched := commentPlacement(cm, placementVersionID, placementHTML)
-	return gin.H{
-		"id":                    cm.ID,
-		"author":                principalJSON(cm.Author),
-		"body":                  cm.Body,
-		"selected_text":         cm.SelectedText,
-		"anchor":                cm.Anchor,
-		"status":                cm.Status,
-		"created_on_version_id": cm.VersionID,
-		"current_placement": gin.H{
-			"version_id":   placementVersionID,
-			"status":       status,
-			"anchor":       cm.Anchor,
-			"matched_text": matched,
-			"confidence":   confidence,
-		},
-	}
-}
-
-

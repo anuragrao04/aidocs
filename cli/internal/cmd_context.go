@@ -16,7 +16,7 @@ func contextCmd(g *globals, out io.Writer) *cobra.Command {
 			return err
 		}
 		return render(out, g, b)
-	}}, &cobra.Command{Use: "use <server>", Short: "Switch the active context", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	}}, &cobra.Command{Use: "use <server>", Short: "Switch the active context", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, _ := loadConfig()
 		name := ctxName(args[0])
 		if cfg.Contexts == nil {

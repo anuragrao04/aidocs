@@ -27,8 +27,17 @@ const (
 	commentStatusResolved = "resolved"
 )
 
+// Comment placement statuses relative to the rendered version.
+const (
+	placementAttached = "attached"
+	placementOrphaned = "orphaned"
+)
+
 // Render audience prefix used in render tokens.
 const renderAudiencePrefix = "render:"
+
+// googleUserIDPrefix prefixes user IDs minted from a Google subject.
+const googleUserIDPrefix = "usr_google_"
 
 // Environment values
 const (
@@ -36,7 +45,7 @@ const (
 	envTest       = "test"
 )
 
-// SA name-allocation retry parameters (server-09).
+// Retry bounds for allocating a unique service-account name.
 const (
 	saNameMaxAttempts         = 8
 	saNameShortDomainAttempts = 5

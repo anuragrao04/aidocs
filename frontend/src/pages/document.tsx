@@ -1,3 +1,3 @@
-// document.tsx was a ~620-line file holding six components. It has been split
-// into focused doc-*.tsx modules (web-05). This entry just re-exports the page.
+// The document page is implemented across the doc-*.tsx modules; this file
+// re-exports the entry component.
 export { DocumentPage } from "./doc-page";

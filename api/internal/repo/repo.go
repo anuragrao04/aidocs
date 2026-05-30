@@ -49,18 +49,18 @@ const (
 )
 
 type Document struct {
-	ID               string
-	Title            string
-	Visibility       string
-	Owner            auth.Principal
-	CurrentVersionID string
+	ID               string         `json:"id"`
+	Title            string         `json:"title"`
+	Visibility       string         `json:"visibility"`
+	Owner            auth.Principal `json:"owner"`
+	CurrentVersionID string         `json:"current_version_id"`
 }
 
 type ServiceAccount struct {
-	ID       string
-	Name     string
-	Owner    auth.Principal
-	Disabled bool
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Owner    auth.Principal `json:"owner"`
+	Disabled bool           `json:"disabled"`
 }
 
 type ServiceAccountKey struct {
@@ -77,20 +77,20 @@ type OwnershipTransfer struct {
 }
 
 type Grant struct {
-	ID         string
-	DocumentID string
-	Principal  auth.Principal
-	Role       Role
-	GrantedBy  auth.Principal
+	ID         string         `json:"id"`
+	DocumentID string         `json:"document_id"`
+	Principal  auth.Principal `json:"principal"`
+	Role       Role           `json:"role"`
+	GrantedBy  auth.Principal `json:"granted_by"`
 }
 
 type Version struct {
-	ID            string
-	Number        int
-	DocumentID    string
-	CreatedBy     auth.Principal
-	ChangeSummary string
-	SHA256        string
+	ID            string         `json:"id"`
+	Number        int            `json:"number"`
+	DocumentID    string         `json:"document_id"`
+	CreatedBy     auth.Principal `json:"created_by"`
+	ChangeSummary string         `json:"change_summary"`
+	SHA256        string         `json:"sha256"`
 }
 
 type Anchor struct {
@@ -103,19 +103,19 @@ type Anchor struct {
 }
 
 type CLICredential struct {
-	ID   string
-	Name string
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type Comment struct {
-	ID           string
-	DocumentID   string
-	VersionID    string
-	Author       auth.Principal
-	Body         string
-	SelectedText string
-	Anchor       Anchor
-	Status       string
+	ID           string         `json:"id"`
+	DocumentID   string         `json:"document_id"`
+	VersionID    string         `json:"version_id"`
+	Author       auth.Principal `json:"author"`
+	Body         string         `json:"body"`
+	SelectedText string         `json:"selected_text"`
+	Anchor       Anchor         `json:"anchor"`
+	Status       string         `json:"status"`
 }
 
 // Repository is the application persistence boundary. The real implementation

@@ -10,7 +10,10 @@ import { api, type Anchor, type Comment } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
 import {
   COMMENT_FILTERS,
+  COMMENT_FILTER_ALL,
   COMMENT_STATUS,
+  DEFAULT_COMMENT_FILTER,
+  PLACEMENT_STATUS,
   type CommentFilter,
 } from "@/lib/constants";
 import { useDoc } from "./doc-context";
@@ -27,7 +30,7 @@ export function Comments() {
     setActiveComment,
   } = useDoc();
   const q = useQueryClient();
-  const [filter, setFilter] = useState<CommentFilter>("open");
+  const [filter, setFilter] = useState<CommentFilter>(DEFAULT_COMMENT_FILTER);
   const [quote, setQuote] = useState("");
   const [body, setBody] = useState("");
   const anchorRef = useRef<Partial<Anchor> | undefined>(undefined);
@@ -62,7 +65,7 @@ export function Comments() {
   };
 
   const items = comments.filter((c) => {
-    if (filter === "all") return true;
+    if (filter === COMMENT_FILTER_ALL) return true;
     if (filter === COMMENT_STATUS.resolved)
       return c.status === COMMENT_STATUS.resolved;
     return c.status !== COMMENT_STATUS.resolved;
@@ -129,7 +132,7 @@ export function Comments() {
           <Center>Could not load comments.</Center>
         ) : items.length === 0 ? (
           <EmptyState
-            title={filter === "open" ? "No open comments" : "Nothing here"}
+            title={filter === COMMENT_STATUS.open ? "No open comments" : "Nothing here"}
             description="Select text inside the rendered document to start a thread."
           />
         ) : (
@@ -172,7 +175,7 @@ function CommentCard({ c, docId }: { c: Comment; docId: string }) {
         )}
       </div>
       {c.current_placement?.status &&
-        c.current_placement.status !== "attached" && (
+        c.current_placement.status !== PLACEMENT_STATUS.attached && (
           <Badge variant="warning" className="mb-2">
             {c.current_placement.status}
           </Badge>

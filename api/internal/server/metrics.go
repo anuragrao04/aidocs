@@ -12,7 +12,7 @@ import (
 
 var metricsRegistry = prometheus.NewRegistry()
 
-// byteBuckets is shared by request/response/html size histograms. (server-16)
+// byteBuckets are the histogram buckets for request, response, and HTML sizes.
 var byteBuckets = []float64{0, 512, 1024, 10 * 1024, 100 * 1024, 1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024}
 
 var (
@@ -147,5 +147,3 @@ func incRender(event, outcome string) { renderEventsTotal.WithLabelValues(event,
 func observeHTML(operation string, size int) {
 	htmlBytes.WithLabelValues(operation).Observe(float64(size))
 }
-
-

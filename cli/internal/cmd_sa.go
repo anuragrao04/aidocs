@@ -30,7 +30,7 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 			"  aidocs sa create n8n-prod\n" +
 			"  aidocs sa create ci-runner@ops.team.bot\n" +
 			"  aidocs sa create nightly@crew.bot",
-		Args: cobra.ExactArgs(1),
+		Args: exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, err := client(g)
 			if err != nil {
@@ -75,7 +75,7 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 	}
 	var newName string
 	var enable, disable bool
-	upd := &cobra.Command{Use: "update <sa_id>", Short: "Update a service account", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	upd := &cobra.Command{Use: "update <sa_id>", Short: "Update a service account", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		body := map[string]any{}
 		if newName != "" {
 			body["name"] = newName
@@ -94,13 +94,13 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 	upd.Flags().BoolVar(&enable, "enable", false, "enable (un-disable) the service account")
 	upd.Flags().BoolVar(&disable, "disable", false, "disable the service account")
 	key := &cobra.Command{Use: "key", Short: "Manage service account keys"}
-	keyCreate := &cobra.Command{Use: "create <sa_id>", Short: "Create a service account key", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	keyCreate := &cobra.Command{Use: "create <sa_id>", Short: "Create a service account key", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.json("POST", apiPath("/v1/service-accounts/%s/keys", args[0]), map[string]any{"name": first(name, "default")})
 		})
 	}}
 	keyCreate.Flags().StringVar(&name, "name", "default", "key name")
-	keyRevoke := &cobra.Command{Use: "revoke <sa_id> <key_id>", Short: "Revoke a service account key", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+	keyRevoke := &cobra.Command{Use: "revoke <sa_id> <key_id>", Short: "Revoke a service account key", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.do("DELETE", apiPath("/v1/service-accounts/%s/keys/%s", args[0], args[1]), nil, "")
 		})
@@ -112,7 +112,7 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 
 func transferCmd(g *globals, out io.Writer) *cobra.Command {
 	var to string
-	c := &cobra.Command{Use: "transfer <sa_id>", Short: "Transfer service account ownership", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	c := &cobra.Command{Use: "transfer <sa_id>", Short: "Transfer service account ownership", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
 			return c.json("POST", apiPath("/v1/service-accounts/%s/transfer", args[0]), map[string]any{"to_user_email": to})
 		})
