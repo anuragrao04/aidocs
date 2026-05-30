@@ -128,7 +128,7 @@ func splitCSV(s string) []string {
 func newBlobStore(ctx context.Context) (blob.Store, error) {
 	bucket := os.Getenv("BLOB_BUCKET")
 	if bucket == "" {
-		log.Fatal("BLOB_BUCKET is required")
+		return nil, fmt.Errorf("BLOB_BUCKET is required")
 	}
 	region := os.Getenv("BLOB_REGION")
 	if region == "" {

@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"embed"
 	"io/fs"
+	"log"
 	"net/http"
-	"path/filepath"
+	"path"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -42,14 +43,14 @@ func registerFrontendRoutes(r *gin.Engine, publicURL string) {
 		c.Data(http.StatusOK, "text/html; charset=utf-8", b)
 	})
 
-	r.GET("/assets/*filepath", gin.WrapH(http.StripPrefix("/assets/", http.FileServer(http.FS(mustSubOrSelf(dist, "assets"))))))
+	r.GET("/assets/*filepath", gin.WrapH(http.StripPrefix("/assets/", http.FileServer(http.FS(subOrSelf(dist, "assets"))))))
 	r.NoRoute(func(c *gin.Context) {
 		if c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead {
 			c.Status(http.StatusNotFound)
 			return
 		}
-		path := strings.TrimPrefix(filepath.Clean(c.Request.URL.Path), "/")
-		if path != "." && path != "" && fileExists(dist, path) {
+		urlPath := strings.TrimPrefix(path.Clean(c.Request.URL.Path), "/")
+		if urlPath != "." && urlPath != "" && fileExists(dist, urlPath) {
 			fileServer.ServeHTTP(c.Writer, c.Request)
 			return
 		}
@@ -63,9 +64,12 @@ func registerFrontendRoutes(r *gin.Engine, publicURL string) {
 	})
 }
 
-func mustSubOrSelf(fsys fs.FS, dir string) fs.FS {
+// subOrSelf returns a sub-filesystem rooted at dir, or falls back to fsys
+// with a log warning if the subdirectory does not exist. (server-15)
+func subOrSelf(fsys fs.FS, dir string) fs.FS {
 	sub, err := fs.Sub(fsys, dir)
 	if err != nil {
+		log.Printf("subOrSelf: falling back to parent FS because %q not found: %v", dir, err)
 		return fsys
 	}
 	return sub

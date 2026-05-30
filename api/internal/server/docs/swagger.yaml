@@ -303,52 +303,6 @@ paths:
       summary: Create document
       tags:
       - documents
-  /v1/documents/{doc_id}/comments/{comment_id}:
-    delete:
-      parameters:
-      - description: Document ID
-        in: path
-        name: doc_id
-        required: true
-        type: string
-      - description: Comment ID
-        in: path
-        name: comment_id
-        required: true
-        type: string
-      responses:
-        "204":
-          description: No Content
-      security:
-      - bearerAuth: []
-      - cookieAuth: []
-      summary: Delete comment
-      tags:
-      - comments
-    patch:
-      parameters:
-      - description: Document ID
-        in: path
-        name: doc_id
-        required: true
-        type: string
-      - description: Comment ID
-        in: path
-        name: comment_id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - bearerAuth: []
-      - cookieAuth: []
-      summary: Update comment
-      tags:
-      - comments
   /v1/documents/{id}:
     delete:
       parameters:
@@ -449,6 +403,52 @@ paths:
       - bearerAuth: []
       - cookieAuth: []
       summary: Create comment
+      tags:
+      - comments
+  /v1/documents/{id}/comments/{comment_id}:
+    delete:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comment ID
+        in: path
+        name: comment_id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Delete comment
+      tags:
+      - comments
+    patch:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comment ID
+        in: path
+        name: comment_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Update comment
       tags:
       - comments
   /v1/documents/{id}/grants:

@@ -1,10 +1,8 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,10 +13,12 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/anuragrao/aidocs/api/internal/auth"
+	"github.com/anuragrao/aidocs/api/internal/blob"
 	"github.com/anuragrao/aidocs/api/internal/bots"
 	"github.com/anuragrao/aidocs/api/internal/repo"
 )
 
+// Config holds static configuration for the server.
 type Config struct {
 	Environment         string
 	AppOrigin           string
@@ -27,6 +27,8 @@ type Config struct {
 	SessionSecret       string
 	AllowedOAuthDomains []string
 }
+
+// Server wraps the gin engine.
 type Server struct{ engine *gin.Engine }
 
 type dependencies struct {
@@ -39,6 +41,8 @@ type dependencies struct {
 	renderOrigin        string
 	allowedOAuthDomains []string
 }
+
+// Option configures the Server.
 type Option func(*dependencies)
 
 func WithAuthenticator(a auth.Authenticator) Option {
@@ -49,18 +53,48 @@ func WithStateStore(st auth.LoginStateStore) Option {
 	return func(d *dependencies) { d.stateStore = st }
 }
 
+// denyAllAuthenticator rejects every request. Used as the default so that
+// forgetting WithAuthenticator causes an obvious auth failure at runtime
+// rather than a silent in-memory / header-bypass auth path. (server-04)
+type denyAllAuthenticator struct{}
+
+func (denyAllAuthenticator) Authenticate(_ *http.Request) (*auth.Principal, error) {
+	return nil, auth.ErrUnauthorized
+}
+
+// logFormatter formats gin access-log lines. (server-19)
+func logFormatter(param gin.LogFormatterParams) string {
+	return param.TimeStamp.Format(time.RFC3339) + " " +
+		param.Method + " " +
+		param.Path + " " +
+		param.ClientIP + " " +
+		param.StatusCodeColor() + http.StatusText(param.StatusCode) + param.ResetColor() + " " +
+		param.Latency.String() + "\n"
+}
+
+// New constructs and returns a configured Server. Required dependencies
+// (authenticator, repository) default to safe stubs so tests that omit them
+// still compile; production callers must always provide real implementations
+// via WithAuthenticator / WithRepository. (server-04)
 func New(cfg Config, opts ...Option) *Server {
 	gin.SetMode(gin.ReleaseMode)
-	deps := dependencies{authenticator: auth.TestHeaderAuthenticator{}, repository: repo.NewMemory(), stateStore: auth.NewStateStore(), googleOAuth: cfg.GoogleOAuth, sessionSecret: cfg.SessionSecret, appOrigin: cfg.AppOrigin, renderOrigin: cfg.RenderOrigin, allowedOAuthDomains: cfg.AllowedOAuthDomains}
+	deps := dependencies{
+		authenticator: denyAllAuthenticator{},
+		repository:    repo.NewMemory(),
+		stateStore:    auth.NewStateStore(),
+		googleOAuth:   cfg.GoogleOAuth,
+		sessionSecret: cfg.SessionSecret,
+		appOrigin:     cfg.AppOrigin,
+		renderOrigin:  cfg.RenderOrigin,
+		allowedOAuthDomains: cfg.AllowedOAuthDomains,
+	}
 	for _, opt := range opts {
 		opt(&deps)
 	}
 	r := gin.New()
 	r.RedirectTrailingSlash = false
-	if cfg.Environment != "test" {
-		r.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-			return param.TimeStamp.Format(time.RFC3339) + " " + param.Method + " " + param.Path + " " + param.ClientIP + " " + param.StatusCodeColor() + http.StatusText(param.StatusCode) + param.ResetColor() + " " + param.Latency.String() + "\n"
-		}))
+	if cfg.Environment != envTest {
+		r.Use(gin.LoggerWithFormatter(logFormatter))
 	}
 	r.Use(gin.Recovery())
 	r.Use(prometheusMiddleware())
@@ -68,6 +102,7 @@ func New(cfg Config, opts ...Option) *Server {
 	s.routes(deps)
 	return s
 }
+
 func (s *Server) Handler() http.Handler { return s.engine }
 func (s *Server) Run(addr string) error { return s.engine.Run(addr) }
 
@@ -79,43 +114,46 @@ func (s *Server) routes(deps dependencies) {
 	registerAPIDocsRoutes(s.engine)
 	s.engine.GET("/v/:version_id", h.renderVersion)
 	registerFrontendRoutes(s.engine, deps.appOrigin)
+
 	v1 := s.engine.Group("/v1")
 	v1.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
-	v1.GET("/me", requireAuth(deps.authenticator), h.me)
 	v1.GET("/auth/google/start", h.googleStart)
 	v1.GET("/auth/google/callback", h.googleCallback)
 	v1.POST("/auth/cli/exchange", h.cliExchange)
-	v1.GET("/auth/cli/credentials", requireAuth(deps.authenticator), h.listCLICredentials)
-	v1.DELETE("/auth/cli/credentials/:id", requireAuth(deps.authenticator), h.revokeCLICredential)
-	v1.POST("/service-accounts", requireAuth(deps.authenticator), h.createServiceAccount)
-	v1.POST("/documents", requireAuth(deps.authenticator), h.createDocument)
-	v1.POST("/documents/:id/grants", requireAuth(deps.authenticator), h.createGrant)
-	v1.POST("/documents/:id/versions", requireAuth(deps.authenticator), h.createVersion)
-	v1.POST("/documents/:id/comments", requireAuth(deps.authenticator), h.createComment)
 
-	v1.GET("/service-accounts", requireAuth(deps.authenticator), h.listServiceAccounts)
-	v1.PATCH("/service-accounts/:id", requireAuth(deps.authenticator), h.patchServiceAccount)
-	v1.POST("/service-accounts/:id/keys", requireAuth(deps.authenticator), h.createServiceAccountKey)
-	v1.GET("/service-accounts/:id/keys", requireAuth(deps.authenticator), h.listServiceAccountKeys)
-	v1.DELETE("/service-accounts/:id/keys/:key_id", requireAuth(deps.authenticator), h.revokeServiceAccountKey)
-	v1.POST("/service-accounts/:id/transfer", requireAuth(deps.authenticator), h.createOwnershipTransfer)
-	v1.GET("/service-accounts/transfers", requireAuth(deps.authenticator), h.listOwnershipTransfers)
-	v1.POST("/service-accounts/transfers/:id/accept", requireAuth(deps.authenticator), h.acceptOwnershipTransfer)
-	v1.POST("/service-accounts/transfers/:id/decline", requireAuth(deps.authenticator), h.declineOwnershipTransfer)
-	v1.GET("/documents", requireAuth(deps.authenticator), h.listDocuments)
-	v1.GET("/documents/:id", requireAuth(deps.authenticator), h.getDocument)
-	v1.PATCH("/documents/:id", requireAuth(deps.authenticator), h.patchDocument)
-	v1.DELETE("/documents/:id", requireAuth(deps.authenticator), h.deleteDocument)
-	v1.GET("/documents/:id/grants", requireAuth(deps.authenticator), h.listGrants)
-	v1.PATCH("/documents/:id/grants/:grant_id", requireAuth(deps.authenticator), h.patchGrant)
-	v1.DELETE("/documents/:id/grants/:grant_id", requireAuth(deps.authenticator), h.deleteGrant)
-	v1.GET("/documents/:id/versions", requireAuth(deps.authenticator), h.listVersions)
-	v1.GET("/versions/:id", requireAuth(deps.authenticator), h.getVersion)
-	v1.GET("/versions/:id/html", requireAuth(deps.authenticator), h.getVersionHTML)
-	v1.POST("/versions/:id/render-token", requireAuth(deps.authenticator), h.createRenderToken)
-	v1.GET("/documents/:id/comments", requireAuth(deps.authenticator), h.listComments)
-	v1.PATCH("/documents/:id/comments/:comment_id", requireAuth(deps.authenticator), h.patchComment)
-	v1.DELETE("/documents/:id/comments/:comment_id", requireAuth(deps.authenticator), h.deleteComment)
+	// All routes below require authentication. (server-05)
+	authed := v1.Group("", requireAuth(deps.authenticator))
+	authed.GET("/me", h.me)
+	authed.GET("/auth/cli/credentials", h.listCLICredentials)
+	authed.DELETE("/auth/cli/credentials/:id", h.revokeCLICredential)
+	authed.POST("/service-accounts", h.createServiceAccount)
+	authed.GET("/service-accounts", h.listServiceAccounts)
+	authed.PATCH("/service-accounts/:id", h.patchServiceAccount)
+	authed.POST("/service-accounts/:id/keys", h.createServiceAccountKey)
+	authed.GET("/service-accounts/:id/keys", h.listServiceAccountKeys)
+	authed.DELETE("/service-accounts/:id/keys/:key_id", h.revokeServiceAccountKey)
+	authed.POST("/service-accounts/:id/transfer", h.createOwnershipTransfer)
+	authed.GET("/service-accounts/transfers", h.listOwnershipTransfers)
+	authed.POST("/service-accounts/transfers/:id/accept", h.acceptOwnershipTransfer)
+	authed.POST("/service-accounts/transfers/:id/decline", h.declineOwnershipTransfer)
+	authed.POST("/documents", h.createDocument)
+	authed.GET("/documents", h.listDocuments)
+	authed.GET("/documents/:id", h.getDocument)
+	authed.PATCH("/documents/:id", h.patchDocument)
+	authed.DELETE("/documents/:id", h.deleteDocument)
+	authed.POST("/documents/:id/grants", h.createGrant)
+	authed.GET("/documents/:id/grants", h.listGrants)
+	authed.PATCH("/documents/:id/grants/:grant_id", h.patchGrant)
+	authed.DELETE("/documents/:id/grants/:grant_id", h.deleteGrant)
+	authed.POST("/documents/:id/versions", h.createVersion)
+	authed.GET("/documents/:id/versions", h.listVersions)
+	authed.GET("/versions/:id", h.getVersion)
+	authed.GET("/versions/:id/html", h.getVersionHTML)
+	authed.POST("/versions/:id/render-token", h.createRenderToken)
+	authed.POST("/documents/:id/comments", h.createComment)
+	authed.GET("/documents/:id/comments", h.listComments)
+	authed.PATCH("/documents/:id/comments/:comment_id", h.patchComment)
+	authed.DELETE("/documents/:id/comments/:comment_id", h.deleteComment)
 }
 
 type handlers struct{ deps dependencies }
@@ -131,34 +169,31 @@ type handlers struct{ deps dependencies }
 // @Success 302
 // @Router /v1/auth/google/start [get]
 func (h handlers) googleStart(c *gin.Context) {
-	mode := c.DefaultQuery("mode", "web")
+	mode := c.DefaultQuery("mode", authModeWeb)
 	state := c.Query("state")
 	if state == "" {
 		var err error
 		state, err = auth.RandomURLToken()
 		if err != nil {
-			internal(c)
+			internalErr(c, err)
 			return
 		}
 	}
 	st := auth.LoginState{Mode: mode, Redirect: c.Query("redirect"), CLIRedirect: c.Query("cli_redirect"), CodeChallenge: c.Query("code_challenge"), ExpiresAt: time.Now().Add(10 * time.Minute)}
-	if mode == "web" && !safeWebRedirect(st.Redirect) {
+	if mode == authModeWeb && !safeWebRedirect(st.Redirect) {
 		badRequest(c, "invalid redirect")
 		return
 	}
-	if mode == "cli" {
+	if mode == authModeCLI {
 		if st.CodeChallenge == "" || !auth.LoopbackRedirectAllowed(st.CLIRedirect) {
 			badRequest(c, "invalid cli oauth parameters")
 			return
 		}
 	}
-	if err := h.deps.stateStore.PutState(state, st); err != nil {
-		internal(c)
+	if err := h.deps.stateStore.PutState(c.Request.Context(), state, st); err != nil {
+		internalErr(c, err)
 		return
 	}
-	// PKCE is between the CLI and aidocs. Do not forward the CLI's
-	// code_challenge to Google, because aidocs performs the Google code
-	// exchange and does not have the CLI's code_verifier at that point.
 	c.Redirect(http.StatusFound, h.deps.googleOAuth.AuthCodeURL(state, oauth2.AccessTypeOffline))
 }
 
@@ -170,7 +205,11 @@ func (h handlers) googleStart(c *gin.Context) {
 // @Success 302
 // @Router /v1/auth/google/callback [get]
 func (h handlers) googleCallback(c *gin.Context) {
-	st, ok := h.deps.stateStore.TakeState(c.Query("state"))
+	st, ok, err := h.deps.stateStore.TakeState(c.Request.Context(), c.Query("state"))
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
 	if !ok {
 		badRequest(c, "invalid oauth state")
 		return
@@ -189,19 +228,19 @@ func (h handlers) googleCallback(c *gin.Context) {
 	uid := "usr_google_" + gu.Sub
 	p, err := h.deps.repository.UpsertGoogleUser(c.Request.Context(), uid, gu.Email, gu.Name, gu.Sub, gu.PictureURL)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
-	if st.Mode == "cli" {
+	if st.Mode == authModeCLI {
 		code, err := auth.RandomURLToken()
 		if err != nil {
-			internal(c)
+			internalErr(c, err)
 			return
 		}
 		st.GoogleUser = gu
 		st.UserID = p.ID
-		if err := h.deps.stateStore.PutCode(code, st); err != nil {
-			internal(c)
+		if err := h.deps.stateStore.PutCode(c.Request.Context(), code, st); err != nil {
+			internalErr(c, err)
 			return
 		}
 		u, _ := url.Parse(st.CLIRedirect)
@@ -239,7 +278,11 @@ func (h handlers) cliExchange(c *gin.Context) {
 		badRequest(c, "invalid cli exchange")
 		return
 	}
-	st, ok := h.deps.stateStore.TakeCode(in.Code)
+	st, ok, err := h.deps.stateStore.TakeCode(c.Request.Context(), in.Code)
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
 	if !ok || !auth.VerifyPKCES256(in.CodeVerifier, st.CodeChallenge) {
 		incAuth("cli_exchange", "failure")
 		c.JSON(http.StatusUnauthorized, errorResponse("unauthorized", "invalid cli code", nil))
@@ -247,7 +290,7 @@ func (h handlers) cliExchange(c *gin.Context) {
 	}
 	token, hash, err := auth.NewBearerToken("aidocs_cli_")
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	name := in.Name
@@ -256,7 +299,7 @@ func (h handlers) cliExchange(c *gin.Context) {
 	}
 	id, err := h.deps.repository.CreateCLICredential(c.Request.Context(), st.UserID, name, hash)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incAuth("cli_exchange", "success")
@@ -275,7 +318,7 @@ func (h handlers) listCLICredentials(c *gin.Context) {
 	p := current(c)
 	items, err := h.deps.repository.ListCLICredentials(c.Request.Context(), p.ID)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
@@ -292,14 +335,17 @@ func (h handlers) listCLICredentials(c *gin.Context) {
 func (h handlers) revokeCLICredential(c *gin.Context) {
 	p := current(c)
 	if err := h.deps.repository.RevokeCLICredential(c.Request.Context(), p.ID, c.Param("id")); err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)
 }
+
 func (h handlers) setSessionCookie(c *gin.Context, p auth.Principal) {
 	cookie := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).Sign(p.ID)
-	c.SetCookie("aidocs_session", cookie, 86400*30, "/", "", true, true)
+	// Secure=true only in production; plain http loopback needs Secure=false. (server-12)
+	secure := h.deps.appOrigin != "" && strings.HasPrefix(h.deps.appOrigin, "https://")
+	c.SetCookie(sessionCookieName, cookie, sessionTTLSeconds, "/", "", secure, true)
 }
 
 // Discovery godoc
@@ -309,7 +355,7 @@ func (h handlers) setSessionCookie(c *gin.Context, p auth.Principal) {
 // @Success 200 {object} map[string]interface{}
 // @Router /.well-known/aidocs.json [get]
 func (h handlers) discovery(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"name": "aidocs", "api_version": "v1", "auth": gin.H{"modes": []string{"web", "cli"}}})
+	c.JSON(http.StatusOK, gin.H{"name": "aidocs", "api_version": "v1", "auth": gin.H{"modes": []string{authModeWeb, authModeCLI}}})
 }
 
 // CommitTXT godoc
@@ -345,7 +391,7 @@ func (h handlers) me(c *gin.Context) {
 	} else {
 		sa, err := h.deps.repository.GetServiceAccount(c.Request.Context(), p.ID)
 		if err != nil {
-			internal(c)
+			internalErr(c, err)
 			return
 		}
 		out["service_account"] = gin.H{
@@ -379,7 +425,7 @@ func (h handlers) createDocument(c *gin.Context) {
 	title := c.PostForm("title")
 	vis := c.PostForm("visibility")
 	if vis == "" {
-		vis = "private"
+		vis = visibilityPrivate
 	}
 	if !validVisibility(vis) {
 		badRequest(c, "invalid visibility")
@@ -397,7 +443,7 @@ func (h handlers) createDocument(c *gin.Context) {
 	observeHTML("document_create", len(html))
 	d, _, err := h.deps.repository.CreateDocument(c.Request.Context(), *p, title, vis, html)
 	if err != nil {
-		if isBlobStorageError(err) {
+		if errors.Is(err, blob.ErrStorage) {
 			c.JSON(http.StatusBadGateway, errorResponse("blob_storage_failed", "could not upload HTML to blob storage", nil))
 			return
 		}
@@ -407,6 +453,38 @@ func (h handlers) createDocument(c *gin.Context) {
 	incDocument("created", d.Visibility, actorType(c))
 	incVersion("created_initial", actorType(c))
 	c.JSON(http.StatusCreated, gin.H{"id": d.ID, "current_version_id": d.CurrentVersionID})
+}
+
+// allocateServiceAccountName tries to find an unused bot name by generating
+// random domains. It returns the ServiceAccount on success, or the last error
+// on permanent failure. (server-09)
+func allocateServiceAccountName(c *gin.Context, r repo.Repository, p auth.Principal, label, explicitDomain string) (repo.ServiceAccount, string, error) {
+	explicit := explicitDomain != ""
+	attempts := saNameMaxAttempts
+	if explicit {
+		attempts = 1
+	}
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		domain := explicitDomain
+		if !explicit {
+			if i < saNameShortDomainAttempts {
+				domain = bots.GenerateDomain()
+			} else {
+				domain = bots.GenerateDomainExtended()
+			}
+		}
+		fullName := bots.Compose(label, domain)
+		sa, err := r.CreateServiceAccount(c.Request.Context(), p, fullName)
+		if err == nil {
+			return sa, fullName, nil
+		}
+		lastErr = err
+		if !errors.Is(err, repo.ErrConflict) {
+			return repo.ServiceAccount{}, "", err
+		}
+	}
+	return repo.ServiceAccount{}, "", lastErr
 }
 
 // CreateServiceAccount godoc
@@ -436,58 +514,29 @@ func (h handlers) createServiceAccount(c *gin.Context) {
 		badRequest(c, "Use letters, numbers, and hyphens for the bot's name.")
 		return
 	}
-	explicit := in.Domain != ""
-	if explicit {
+	if in.Domain != "" {
 		if err := bots.ValidateDomain(in.Domain); err != nil {
 			badRequest(c, "Addresses must end in .bot.")
 			return
 		}
 	}
-	var sa repo.ServiceAccount
-	var fullName string
-	var lastErr error
-	attempts := 1
-	if !explicit {
-		attempts = 8
-	}
-	for i := 0; i < attempts; i++ {
-		domain := in.Domain
-		if !explicit {
-			if i < 5 {
-				domain = bots.GenerateDomain()
-			} else {
-				domain = bots.GenerateDomainExtended()
-			}
-		}
-		fullName = bots.Compose(in.Label, domain)
-		var err error
-		sa, err = h.deps.repository.CreateServiceAccount(c.Request.Context(), *p, fullName)
-		if err == nil {
-			lastErr = nil
-			break
-		}
-		lastErr = err
-		if !errors.Is(err, repo.ErrConflict) {
-			internal(c)
-			return
-		}
-	}
-	if lastErr != nil {
-		if explicit {
+	sa, fullName, err := allocateServiceAccountName(c, h.deps.repository, *p, in.Label, in.Domain)
+	if err != nil {
+		if errors.Is(err, repo.ErrConflict) && in.Domain != "" {
 			c.JSON(http.StatusConflict, gin.H{"error": "address_taken", "message": "Someone already uses " + fullName + ". Try a different address."})
 			return
 		}
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	token, hash, err := auth.NewBearerToken("aidocs_sa_")
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	keyID, err := h.deps.repository.CreateServiceAccountKey(c.Request.Context(), sa.ID, "default", hash)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incServiceAccount("created", actorType(c))
@@ -501,6 +550,48 @@ func (h handlers) createServiceAccount(c *gin.Context) {
 		"grants":   []any{},
 		"key":      gin.H{"id": keyID, "token": token},
 	})
+}
+
+// resolveGrantPrincipal resolves an address or inline principal spec to a
+// concrete auth.Principal. (server-10)
+func resolveGrantPrincipal(c *gin.Context, r repo.Repository, address string, principal auth.Principal) (auth.Principal, error) {
+	if address != "" {
+		_, domain, ok := bots.Split(address)
+		if !ok {
+			return auth.Principal{}, errors.New("invalid_address")
+		}
+		if strings.HasSuffix(domain, ".bot") {
+			principal = auth.Principal{Type: auth.PrincipalServiceAccount, Name: address}
+		} else {
+			principal = auth.Principal{Type: auth.PrincipalUser, Email: address}
+		}
+	}
+	switch {
+	case principal.Type == auth.PrincipalUser && principal.ID == "" && principal.Email != "":
+		p, err := r.EnsureUserByEmail(c.Request.Context(), principal.Email)
+		if err != nil {
+			return auth.Principal{}, err
+		}
+		return p, nil
+	case principal.Type == auth.PrincipalServiceAccount && principal.ID == "" && principal.Name != "":
+		sa, err := r.GetServiceAccountByName(c.Request.Context(), principal.Name)
+		if err != nil {
+			return auth.Principal{}, err
+		}
+		return auth.Principal{Type: auth.PrincipalServiceAccount, ID: sa.ID, Name: sa.Name}, nil
+	default:
+		if principal.ID == "" {
+			return auth.Principal{}, errors.New("principal_id_required")
+		}
+		exists, err := r.PrincipalExists(c.Request.Context(), principal)
+		if err != nil {
+			return auth.Principal{}, err
+		}
+		if !exists {
+			return auth.Principal{}, repo.ErrNotFound
+		}
+		return principal, nil
+	}
 }
 
 // CreateGrant godoc
@@ -536,59 +627,24 @@ func (h handlers) createGrant(c *gin.Context) {
 		badRequest(c, "invalid role")
 		return
 	}
-	if in.Address != "" {
-		in.Principal.ID = ""
-		in.Principal.Type = ""
-		_, domain, ok := bots.Split(in.Address)
-		if !ok {
-			badRequest(c, "That doesn't look like an email or bot address.")
-			return
-		}
-		if strings.HasSuffix(domain, ".bot") {
-			in.Principal.Type = auth.PrincipalServiceAccount
-			in.Principal.Name = in.Address
-		} else {
-			in.Principal.Type = auth.PrincipalUser
-			in.Principal.Email = in.Address
-		}
-	}
 	principal := auth.Principal{Type: in.Principal.Type, ID: in.Principal.ID, Email: in.Principal.Email, Name: in.Principal.Name}
-	if principal.Type == auth.PrincipalUser && principal.ID == "" && principal.Email != "" {
-		var err error
-		principal, err = h.deps.repository.EnsureUserByEmail(c.Request.Context(), principal.Email)
-		if err != nil {
-			internal(c)
-			return
-		}
-	} else if principal.Type == auth.PrincipalServiceAccount && principal.ID == "" && principal.Name != "" {
-		sa, err := h.deps.repository.GetServiceAccountByName(c.Request.Context(), principal.Name)
-		if errors.Is(err, repo.ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not_found", "message": "No bot with the address " + principal.Name + "."})
-			return
-		}
-		if err != nil {
-			internal(c)
-			return
-		}
-		principal = auth.Principal{Type: auth.PrincipalServiceAccount, ID: sa.ID, Name: sa.Name}
-	} else {
-		if principal.ID == "" {
-			badRequest(c, "principal id, user email, or service account name is required")
-			return
-		}
-		exists, err := h.deps.repository.PrincipalExists(c.Request.Context(), principal)
-		if err != nil {
-			internal(c)
-			return
-		}
-		if !exists {
-			notFound(c)
-			return
-		}
-	}
-	g, err := h.deps.repository.CreateGrant(c.Request.Context(), c.Param("id"), principal, in.Role, *p)
+	resolved, err := resolveGrantPrincipal(c, h.deps.repository, in.Address, principal)
 	if err != nil {
-		internal(c)
+		switch {
+		case err.Error() == "invalid_address":
+			badRequest(c, "That doesn't look like an email or bot address.")
+		case err.Error() == "principal_id_required":
+			badRequest(c, "principal id, user email, or service account name is required")
+		case errors.Is(err, repo.ErrNotFound):
+			notFound(c)
+		default:
+			internalErr(c, err)
+		}
+		return
+	}
+	g, err := h.deps.repository.CreateGrant(c.Request.Context(), c.Param("id"), resolved, in.Role, *p)
+	if err != nil {
+		internalErr(c, err)
 		return
 	}
 	pr := gin.H{"type": g.Principal.Type, "id": g.Principal.ID}
@@ -630,11 +686,17 @@ func (h handlers) createVersion(c *gin.Context) {
 	observeHTML("version_create", len(html))
 	v, err := h.deps.repository.CreateVersion(c.Request.Context(), c.Param("id"), c.PostForm("base_version_id"), c.PostForm("change_summary"), html, *p)
 	if err != nil {
-		if err.Error() == "version_conflict" {
-			c.JSON(http.StatusConflict, errorResponse("version_conflict", "base_version_id is stale", gin.H{"current_version_id": v.ID}))
+		// Use errors.Is/As for version conflict (server-01, server-02).
+		if errors.Is(err, repo.ErrVersionConflict) {
+			var vce *repo.VersionConflictError
+			latestID := v.ID // fallback: still populated by Memory/Postgres
+			if errors.As(err, &vce) {
+				latestID = vce.LatestVersionID
+			}
+			c.JSON(http.StatusConflict, errorResponse("version_conflict", "base_version_id is stale", gin.H{"current_version_id": latestID}))
 			return
 		}
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incVersion("created", actorType(c))
@@ -672,7 +734,7 @@ func (h handlers) createComment(c *gin.Context) {
 			notFound(c)
 			return
 		}
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incComment("created", cm.Status, actorType(c))
@@ -696,7 +758,7 @@ func (h handlers) createRenderToken(c *gin.Context) {
 	if !h.needDocRole(c, v.DocumentID, repo.RoleViewer) {
 		return
 	}
-	token := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).SignForAudience("render:"+v.ID, "render", 5*time.Minute)
+	token := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).SignForAudience(renderAudiencePrefix+v.ID, "render", 5*time.Minute)
 	path := "/v/" + v.ID + "?token=" + url.QueryEscape(token)
 	if h.deps.renderOrigin != "" {
 		path = strings.TrimRight(h.deps.renderOrigin, "/") + path
@@ -720,7 +782,7 @@ func (h handlers) renderVersion(c *gin.Context) {
 	}
 	vid := c.Param("version_id")
 	uid, ok := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).VerifyAudience(c.Query("token"), "render")
-	if !ok || uid != "render:"+vid {
+	if !ok || uid != renderAudiencePrefix+vid {
 		c.JSON(http.StatusUnauthorized, errorResponse("unauthorized", "invalid render token", nil))
 		return
 	}
@@ -762,7 +824,7 @@ func (h handlers) createOwnershipTransfer(c *gin.Context) {
 	}
 	x, err := h.deps.repository.CreateOwnershipTransfer(c.Request.Context(), c.Param("id"), *current(c), in.ToUserEmail)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, x)
@@ -778,7 +840,7 @@ func (h handlers) createOwnershipTransfer(c *gin.Context) {
 func (h handlers) listOwnershipTransfers(c *gin.Context) {
 	items, err := h.deps.repository.ListOwnershipTransfers(c.Request.Context(), *current(c))
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
@@ -878,7 +940,7 @@ func (h handlers) patchDocument(c *gin.Context) {
 	}
 	d, err := h.deps.repository.UpdateDocument(c.Request.Context(), c.Param("id"), in.Title, in.Visibility)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, d)
@@ -897,7 +959,7 @@ func (h handlers) deleteDocument(c *gin.Context) {
 		return
 	}
 	if err := h.deps.repository.DeleteDocument(c.Request.Context(), c.Param("id")); err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.Status(http.StatusNoContent)
@@ -913,7 +975,7 @@ func (h handlers) deleteDocument(c *gin.Context) {
 func (h handlers) listServiceAccounts(c *gin.Context) {
 	items, err := h.deps.repository.ListServiceAccounts(c.Request.Context(), *current(c))
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
@@ -938,7 +1000,7 @@ func (h handlers) patchServiceAccount(c *gin.Context) {
 	_ = c.ShouldBindJSON(&in)
 	sa, err := h.deps.repository.UpdateServiceAccount(c.Request.Context(), c.Param("id"), in.Name, in.Disabled)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, sa)
@@ -965,12 +1027,12 @@ func (h handlers) createServiceAccountKey(c *gin.Context) {
 	}
 	token, hash, err := auth.NewBearerToken("aidocs_sa_")
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	id, err := h.deps.repository.CreateServiceAccountKey(c.Request.Context(), c.Param("id"), in.Name, hash)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incServiceAccount("key_created", actorType(c))
@@ -991,7 +1053,7 @@ func (h handlers) listServiceAccountKeys(c *gin.Context) {
 	}
 	items, err := h.deps.repository.ListServiceAccountKeys(c.Request.Context(), c.Param("id"))
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
@@ -1011,7 +1073,7 @@ func (h handlers) revokeServiceAccountKey(c *gin.Context) {
 		return
 	}
 	if err := h.deps.repository.RevokeServiceAccountKey(c.Request.Context(), c.Param("id"), c.Param("key_id")); err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incServiceAccount("key_revoked", actorType(c))
@@ -1032,7 +1094,7 @@ func (h handlers) listGrants(c *gin.Context) {
 	}
 	items, err := h.deps.repository.ListGrants(c.Request.Context(), c.Param("id"))
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
@@ -1064,7 +1126,7 @@ func (h handlers) patchGrant(c *gin.Context) {
 			notFound(c)
 			return
 		}
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incGrant("updated", string(g.Role), string(g.Principal.Type), actorType(c))
@@ -1089,7 +1151,7 @@ func (h handlers) deleteGrant(c *gin.Context) {
 			notFound(c)
 			return
 		}
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incGrant("deleted", "unknown", "unknown", actorType(c))
@@ -1110,7 +1172,7 @@ func (h handlers) listVersions(c *gin.Context) {
 	}
 	items, err := h.deps.repository.ListVersions(c.Request.Context(), c.Param("id"))
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": items})
@@ -1156,7 +1218,7 @@ func (h handlers) getVersionHTML(c *gin.Context) {
 	}
 	b, err := h.deps.repository.GetVersionHTML(c.Request.Context(), c.Param("id"))
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	observeHTML("version_download", len(b))
@@ -1181,7 +1243,7 @@ func (h handlers) listComments(c *gin.Context) {
 	versionID := c.Query("version_id")
 	items, err := h.deps.repository.ListComments(c.Request.Context(), c.Param("id"), c.Query("status"), versionID)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	placementVersionID := versionID
@@ -1203,29 +1265,29 @@ func (h handlers) listComments(c *gin.Context) {
 // @Tags comments
 // @Security bearerAuth
 // @Security cookieAuth
-// @Param doc_id path string true "Document ID"
+// @Param id path string true "Document ID"
 // @Param comment_id path string true "Comment ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /v1/documents/{doc_id}/comments/{comment_id} [patch]
+// @Router /v1/documents/{id}/comments/{comment_id} [patch]
 func (h handlers) patchComment(c *gin.Context) {
 	if !h.canMutateComment(c, c.Param("id"), c.Param("comment_id")) {
 		return
 	}
 	var in struct{ Body, Status string }
 	_ = c.ShouldBindJSON(&in)
-	if in.Status != "" && in.Status != "open" && in.Status != "resolved" {
+	if in.Status != "" && in.Status != commentStatusOpen && in.Status != commentStatusResolved {
 		badRequest(c, "invalid comment status")
 		return
 	}
 	cm, err := h.deps.repository.UpdateComment(c.Request.Context(), c.Param("comment_id"), in.Body, in.Status)
 	if err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	event := "updated"
-	if in.Status == "resolved" {
+	if in.Status == commentStatusResolved {
 		event = "resolved"
-	} else if in.Status == "open" {
+	} else if in.Status == commentStatusOpen {
 		event = "reopened"
 	}
 	incComment(event, cm.Status, actorType(c))
@@ -1237,21 +1299,22 @@ func (h handlers) patchComment(c *gin.Context) {
 // @Tags comments
 // @Security bearerAuth
 // @Security cookieAuth
-// @Param doc_id path string true "Document ID"
+// @Param id path string true "Document ID"
 // @Param comment_id path string true "Comment ID"
 // @Success 204
-// @Router /v1/documents/{doc_id}/comments/{comment_id} [delete]
+// @Router /v1/documents/{id}/comments/{comment_id} [delete]
 func (h handlers) deleteComment(c *gin.Context) {
 	if !h.canMutateComment(c, c.Param("id"), c.Param("comment_id")) {
 		return
 	}
 	if err := h.deps.repository.DeleteComment(c.Request.Context(), c.Param("comment_id")); err != nil {
-		internal(c)
+		internalErr(c, err)
 		return
 	}
 	incComment("deleted", "unknown", actorType(c))
 	c.Status(http.StatusNoContent)
 }
+
 func (h handlers) needServiceAccountOwner(c *gin.Context, saID string) bool {
 	p := current(c)
 	if p.Type != auth.PrincipalUser {
@@ -1265,6 +1328,7 @@ func (h handlers) needServiceAccountOwner(c *gin.Context, saID string) bool {
 	}
 	return true
 }
+
 func (h handlers) canMutateComment(c *gin.Context, docID, commentID string) bool {
 	p := current(c)
 	cm, err := h.deps.repository.GetComment(c.Request.Context(), commentID)
@@ -1286,6 +1350,7 @@ func (h handlers) canMutateComment(c *gin.Context, docID, commentID string) bool
 	forbidden(c, "comment access required")
 	return false
 }
+
 func (h handlers) needDocRole(c *gin.Context, docID string, need repo.Role) bool {
 	role, _ := h.deps.repository.RoleForDocument(c.Request.Context(), *current(c), docID)
 	if !atLeast(role, need) {
@@ -1293,9 +1358,6 @@ func (h handlers) needDocRole(c *gin.Context, docID string, need repo.Role) bool
 		return false
 	}
 	return true
-}
-func notFound(c *gin.Context) {
-	c.JSON(http.StatusNotFound, errorResponse("not_found", "not found", nil))
 }
 
 func requireAuth(a auth.Authenticator) gin.HandlerFunc {
@@ -1311,6 +1373,7 @@ func requireAuth(a auth.Authenticator) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
 func current(c *gin.Context) *auth.Principal {
 	p, ok := c.Get("principal")
 	if !ok {
@@ -1343,10 +1406,12 @@ func readMultipartFile(c *gin.Context, field string) ([]byte, error) {
 	}
 	return b, nil
 }
+
 func atLeast(have repo.Role, need repo.Role) bool {
 	rank := map[repo.Role]int{repo.RoleViewer: 1, repo.RoleCommenter: 2, repo.RoleEditor: 3, repo.RoleOwner: 4}
 	return rank[have] >= rank[need]
 }
+
 func safeWebRedirect(redirect string) bool {
 	if redirect == "" {
 		return true
@@ -1357,12 +1422,15 @@ func safeWebRedirect(redirect string) bool {
 	u, err := url.Parse(redirect)
 	return err == nil && u.Scheme == "" && u.Host == ""
 }
+
 func validGrantRole(role repo.Role) bool {
 	return role == repo.RoleViewer || role == repo.RoleCommenter || role == repo.RoleEditor
 }
+
 func validVisibility(v string) bool {
-	return v == "private" || v == "org" || v == "link"
+	return v == visibilityPrivate || v == visibilityOrg || v == visibilityLink
 }
+
 func hostMatchesOrigin(host, origin string) bool {
 	u, err := url.Parse(origin)
 	if err != nil || u.Host == "" {
@@ -1370,6 +1438,7 @@ func hostMatchesOrigin(host, origin string) bool {
 	}
 	return strings.EqualFold(host, u.Host)
 }
+
 func emailDomainAllowed(email string, allowed []string) bool {
 	if len(allowed) == 0 {
 		return true
@@ -1386,6 +1455,7 @@ func emailDomainAllowed(email string, allowed []string) bool {
 	}
 	return false
 }
+
 func commentsJSON(items []repo.Comment, placementVersionID string, placementHTML []byte) []gin.H {
 	out := make([]gin.H, 0, len(items))
 	for _, cm := range items {
@@ -1393,36 +1463,19 @@ func commentsJSON(items []repo.Comment, placementVersionID string, placementHTML
 	}
 	return out
 }
-func renderWrapperHTML(userHTML []byte, appOrigin string) []byte {
-	return []byte(`<!doctype html><html><head><meta charset="utf-8"><title>aidocs render</title><style>html,body{margin:0;height:100%;overflow:hidden}#aidocs-doc{border:0;width:100%;height:100vh}.aidocs-mark{background-color:#fef08a!important;color:inherit!important;border-bottom:2px solid #ca8a04!important;cursor:pointer;transition:background-color .15s}.aidocs-mark-active{background-color:#fbbf24!important}</style></head><body><iframe id="aidocs-doc" sandbox="allow-scripts allow-same-origin" srcdoc="` + htmlEscape(string(userHTML)) + `"></iframe><script>window.__AIDOCS_APP_ORIGIN__=` + jsString(appOrigin) + `;(` + renderBridgeJS + `)();</script></body></html>`)
-}
 
-const renderBridgeJS = `function(){
-const appOrigin=window.__AIDOCS_APP_ORIGIN__||'*';
-const frame=document.getElementById('aidocs-doc');
-function doc(){try{return frame.contentDocument||frame.contentWindow.document}catch(e){return null}}
-function textNodes(root){const w=(doc()||document).createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.nodeValue.trim()?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT});const a=[];let n;while(n=w.nextNode())a.push(n);return a}
-function clear(){const d=doc();if(!d)return;d.querySelectorAll('mark.aidocs-mark').forEach(m=>m.replaceWith(...m.childNodes));d.body&&d.body.normalize()}
-function norm(s){return (s||'').replace(/\s+/g,' ').trim()}
-function markQuote(q,active){const d=doc();if(!d||!q)return 0;const nq=norm(q);if(!nq)return 0;for(const n of textNodes(d.body)){const raw=n.nodeValue;const nText=norm(raw);if(nText.indexOf(nq)<0)continue;const i=raw.indexOf(q);if(i>=0){const r=d.createRange();r.setStart(n,i);r.setEnd(n,Math.min(raw.length,i+q.length));const m=d.createElement('mark');m.className='aidocs-mark'+(active?' aidocs-mark-active':'');try{r.surroundContents(m);if(active)m.scrollIntoView({block:'center',behavior:'smooth'});return 1}catch(e){}}else{const m=d.createElement('mark');m.className='aidocs-mark'+(active?' aidocs-mark-active':'');try{const r=d.createRange();r.selectNode(n);r.surroundContents(m);if(active)m.scrollIntoView({block:'center',behavior:'smooth'});return 1}catch(e){}}}
-return 0}
-function paint(items,active){clear();(items||[]).forEach(x=>markQuote(x.quote||x.selected_text,x.id===active))}
-function selection(){const d=doc();if(!d)return;const s=d.getSelection();if(!s||s.isCollapsed)return;const q=s.toString().trim();if(!q)return;let pre='',suf='',start=0,end=q.length;try{const body=d.body.innerText||d.body.textContent||'';start=body.indexOf(q);end=start+q.length;pre=body.slice(Math.max(0,start-64),start);suf=body.slice(end,end+64)}catch(e){}parent.postMessage({type:'aidocs:selection',quote:q,prefix:pre,suffix:suf,start_offset:start,end_offset:end,dom_path:'body'},appOrigin==='self'?'*':appOrigin)}
-frame.addEventListener('load',()=>{const d=doc();if(!d)return;d.addEventListener('mouseup',()=>setTimeout(selection,0));d.addEventListener('keyup',()=>setTimeout(selection,0));parent.postMessage({type:'aidocs:ready'},appOrigin==='self'?'*':appOrigin)})
-window.addEventListener('message',e=>{if(e.data&&e.data.type==='aidocs:paint')paint(e.data.comments,e.data.active)})
-}`
-
-func htmlEscape(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "\"", "&quot;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	return s
-}
-
-func jsString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
+// commentPlacement computes the placement status and confidence for a comment
+// relative to the given version. (server-17)
+func commentPlacement(cm repo.Comment, placementVersionID string, placementHTML []byte) (status string, confidence float64, matched string) {
+	status = "attached"
+	confidence = 1.0
+	matched = cm.SelectedText
+	if placementVersionID != cm.VersionID && len(placementHTML) > 0 && !strings.Contains(string(placementHTML), cm.SelectedText) {
+		status = "orphaned"
+		confidence = 0
+		matched = ""
+	}
+	return
 }
 
 func principalJSON(p auth.Principal) gin.H {
@@ -1443,14 +1496,7 @@ func commentJSON(cm repo.Comment, placementVersionID string, placementHTML []byt
 	if placementVersionID == "" {
 		placementVersionID = cm.VersionID
 	}
-	placementStatus := "attached"
-	confidence := 1.0
-	matched := cm.SelectedText
-	if placementVersionID != cm.VersionID && len(placementHTML) > 0 && !strings.Contains(string(placementHTML), cm.SelectedText) {
-		placementStatus = "orphaned"
-		confidence = 0
-		matched = ""
-	}
+	status, confidence, matched := commentPlacement(cm, placementVersionID, placementHTML)
 	return gin.H{
 		"id":                    cm.ID,
 		"author":                principalJSON(cm.Author),
@@ -1461,44 +1507,12 @@ func commentJSON(cm repo.Comment, placementVersionID string, placementHTML []byt
 		"created_on_version_id": cm.VersionID,
 		"current_placement": gin.H{
 			"version_id":   placementVersionID,
-			"status":       placementStatus,
+			"status":       status,
 			"anchor":       cm.Anchor,
 			"matched_text": matched,
 			"confidence":   confidence,
 		},
 	}
 }
-func badRequest(c *gin.Context, msg string) {
-	c.JSON(http.StatusBadRequest, errorResponse("bad_request", msg, nil))
-}
-func forbidden(c *gin.Context, msg string) {
-	c.JSON(http.StatusForbidden, errorResponse("forbidden", msg, nil))
-}
-func isBlobStorageError(err error) bool {
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "s3:") || strings.Contains(msg, "putobject") || strings.Contains(msg, "blob") || strings.Contains(msg, "bucket")
-}
 
-func internal(c *gin.Context) {
-	internalErr(c, nil)
-}
-func internalErr(c *gin.Context, err error) {
-	if err != nil {
-		log.Printf("internal error method=%s path=%s error=%v", c.Request.Method, c.Request.URL.Path, err)
-	} else {
-		log.Printf("internal error method=%s path=%s", c.Request.Method, c.Request.URL.Path)
-	}
-	c.JSON(http.StatusInternalServerError, errorResponse("internal", "internal server error", nil))
-}
-func notImplemented(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, errorResponse("not_implemented", "endpoint scaffolded but not implemented", nil))
-}
-func errorResponse(code, message string, details any) gin.H {
-	err := gin.H{"code": code, "message": message}
-	if details != nil {
-		err["details"] = details
-	}
-	return gin.H{"error": err}
-}
 
-var _ = errors.Is

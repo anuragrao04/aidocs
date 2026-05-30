@@ -16,7 +16,6 @@ import (
 	"github.com/anuragrao/aidocs/api/internal/auth"
 	"github.com/anuragrao/aidocs/api/internal/repo"
 	"github.com/anuragrao/aidocs/api/internal/server"
-	"golang.org/x/oauth2"
 )
 
 func TestDiscovery(t *testing.T) {
@@ -607,7 +606,7 @@ func TestMeWithMissingServiceAccountReturnsInternalError(t *testing.T) {
 
 func TestHandlersPassRequestContextToRepository(t *testing.T) {
 	repo := &contextCheckingRepo{Memory: repo.NewMemory()}
-	h := server.New(server.Config{Environment: "test"}, server.WithRepository(repo)).Handler()
+	h := server.New(server.Config{Environment: "test"}, server.WithRepository(repo), server.WithAuthenticator(testPrincipalAuth{})).Handler()
 	ctx := context.WithValue(context.Background(), contextMarkerKey{}, "seen")
 	req := httptest.NewRequest(http.MethodGet, "/v1/documents", nil).WithContext(ctx)
 	req.Header.Set("X-Test-Principal", "user:owner_1:owner@example.com:Owner")
@@ -634,28 +633,6 @@ func (r *contextCheckingRepo) ListDocuments(ctx context.Context, p auth.Principa
 	return r.Memory.ListDocuments(ctx, p)
 }
 
-func newTestServer() http.Handler {
-	return newConfiguredTestServer(server.Config{Environment: "test"})
-}
-
-func newConfiguredTestServer(cfg server.Config) http.Handler {
-	return server.New(cfg).Handler()
-}
-
-func newOAuthTestServer() http.Handler {
-	return server.New(server.Config{
-		Environment: "test",
-		AppOrigin:   "https://app.example",
-		GoogleOAuth: auth.GoogleOAuth{Config: &oauth2.Config{
-			ClientID:    "client-id",
-			RedirectURL: "https://app.example/v1/auth/google/callback",
-			Endpoint: oauth2.Endpoint{
-				AuthURL:  "https://accounts.example/auth",
-				TokenURL: "https://accounts.example/token",
-			},
-		}},
-	}).Handler()
-}
 
 func do(t *testing.T, h http.Handler, method, path, body string, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()

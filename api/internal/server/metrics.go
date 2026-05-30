@@ -1,7 +1,6 @@
 package server
 
 import (
-	"net/http"
 	"strconv"
 	"time"
 
@@ -12,6 +11,9 @@ import (
 )
 
 var metricsRegistry = prometheus.NewRegistry()
+
+// byteBuckets is shared by request/response/html size histograms. (server-16)
+var byteBuckets = []float64{0, 512, 1024, 10 * 1024, 100 * 1024, 1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024}
 
 var (
 	httpRequestsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -26,12 +28,12 @@ var (
 	httpRequestSizeBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "aidocs_http_request_size_bytes",
 		Help:    "HTTP request body size by route.",
-		Buckets: []float64{0, 512, 1024, 10 * 1024, 100 * 1024, 1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024},
+		Buckets: byteBuckets,
 	}, []string{"method", "route"})
 	httpResponseSizeBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "aidocs_http_response_size_bytes",
 		Help:    "HTTP response body size by route.",
-		Buckets: []float64{0, 512, 1024, 10 * 1024, 100 * 1024, 1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024},
+		Buckets: byteBuckets,
 	}, []string{"method", "route", "status"})
 	authAttemptsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "aidocs_auth_attempts_total",
@@ -64,7 +66,7 @@ var (
 	htmlBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "aidocs_html_bytes",
 		Help:    "Uploaded or downloaded HTML payload sizes.",
-		Buckets: []float64{1024, 10 * 1024, 100 * 1024, 1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024},
+		Buckets: byteBuckets,
 	}, []string{"operation"})
 )
 
@@ -146,4 +148,4 @@ func observeHTML(operation string, size int) {
 	htmlBytes.WithLabelValues(operation).Observe(float64(size))
 }
 
-var _ http.Handler
+

@@ -330,82 +330,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/documents/{doc_id}/comments/{comment_id}": {
-            "delete": {
-                "security": [
-                    {
-                        "bearerAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "tags": [
-                    "comments"
-                ],
-                "summary": "Delete comment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Document ID",
-                        "name": "doc_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Comment ID",
-                        "name": "comment_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    }
-                }
-            },
-            "patch": {
-                "security": [
-                    {
-                        "bearerAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "tags": [
-                    "comments"
-                ],
-                "summary": "Update comment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Document ID",
-                        "name": "doc_id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Comment ID",
-                        "name": "comment_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
-                        }
-                    }
-                }
-            }
-        },
         "/v1/documents/{id}": {
             "get": {
                 "security": [
@@ -571,6 +495,82 @@ const docTemplate = `{
                 "responses": {
                     "201": {
                         "description": "Created",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/documents/{id}/comments/{comment_id}": {
+            "delete": {
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Delete comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comment ID",
+                        "name": "comment_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "tags": [
+                    "comments"
+                ],
+                "summary": "Update comment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comment ID",
+                        "name": "comment_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
