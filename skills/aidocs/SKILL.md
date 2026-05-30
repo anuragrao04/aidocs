@@ -10,14 +10,47 @@ publish it to aidocs instead of dumping the content inline in chat.
 
 ## Workflow
 
-1. Write the artifact as one self-contained HTML file. Inline all CSS,
+1. Read the authoring rules first: run `aidocs guidelines`. It is the
+   source of truth for the single-file/base64-image constraints and the
+   reader-theme contract below.
+2. Write the artifact as one self-contained HTML file. Inline all CSS,
    base64-encode any images, embed diagrams as inline SVG or Mermaid.
    No external requests, no remote stylesheets or scripts.
-2. Save it locally (e.g. `report.html`).
-3. Publish it with the CLI. Discover the exact syntax from
+3. Make the document follow the reader's aidocs theme (see below).
+4. Save it locally (e.g. `report.html`).
+5. Publish it with the CLI. Discover the exact syntax from
    `aidocs --help` and the relevant subcommand help — don't assume.
-4. Return the printed document URL to the user so they can open and
+6. Return the printed document URL to the user so they can open and
    review it.
+
+## Follow the reader's theme
+
+The aidocs viewer has a light/dark toggle and the render layer exposes the
+chosen theme to your document. Opt in so the doc matches the reader's
+chrome instead of shipping its own toggle.
+
+The render bridge sets and keeps in sync, on `<html>` inside your document:
+`data-aidocs-theme="light|dark"` (and `data-aidocs-color-scheme`). Drive the
+page from CSS variables keyed on that attribute:
+
+```css
+:root                           { --bg: #fff;    --ink: #111; }
+:root[data-aidocs-theme="dark"] { --bg: #0b0d12; --ink: #e7ecf3; }
+body { background: var(--bg); color: var(--ink); }
+html { color-scheme: light; }
+:root[data-aidocs-theme="dark"] { color-scheme: dark; }
+```
+
+Notes:
+- `system` is resolved to a concrete `light`/`dark` before it reaches you,
+  and the attribute updates live when the reader toggles — CSS reacts on
+  its own.
+- For JS, listen on your own window:
+  `window.addEventListener('aidocs:theme', e => e.detail.theme)`.
+- Do NOT add your own theme switch; the aidocs UI is the single control.
+- Theming is opt-in: a document that never references `data-aidocs-theme`
+  keeps its hard-coded look.
+- `aidocs guidelines` prints this same contract if you need it inline.
 
 ## Discovering the CLI
 
