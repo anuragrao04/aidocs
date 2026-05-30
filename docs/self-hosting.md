@@ -73,34 +73,33 @@ AIDOCS_ORG_NAME=Acme
 
 Build the image from source, or pull the prebuilt image from GHCR.
 
+Release images are multi-arch (`linux/amd64`, `linux/arm64`) and published to
+both GitHub Container Registry and Docker Hub. Pull from whichever your network
+allows (e.g. a Harbor `proxy_dockerhub` mirror reaches the Docker Hub copy):
+
 ```bash
 # Build locally
 docker build -t aidocs:local .
 
-# Or pull a tagged release
+# GitHub Container Registry
 docker pull ghcr.io/anuragrao04/aidocs:latest
+
+# Docker Hub
+docker pull anuragrao04/aidocs:latest
 ```
 
-Run it, pointing at your Postgres and S3-compatible storage:
+Pin an exact tag or digest in production rather than `:latest`.
+
+Run it, pointing at your Postgres and S3-compatible storage. Copy
+[`.env.example`](../.env.example) to `.env`, fill it in, and pass it through:
 
 ```bash
-docker run --rm -p 8080:8080 \
-  -e DATABASE_URL='postgres://user:pass@host.docker.internal:5432/aidocs?sslmode=disable' \
-  -e BLOB_BUCKET='aidocs' \
-  -e BLOB_REGION='us-east-1' \
-  -e BLOB_ENDPOINT='http://host.docker.internal:9000' \
-  -e BLOB_ACCESS_KEY_ID='minioadmin' \
-  -e BLOB_SECRET_ACCESS_KEY='minioadmin' \
-  -e BLOB_FORCE_PATH_STYLE='true' \
-  -e APP_ORIGIN='http://localhost:8080' \
-  -e RENDER_ORIGIN='http://localhost:8080' \
-  -e GOOGLE_OAUTH_CLIENT_ID='your-client-id' \
-  -e GOOGLE_OAUTH_CLIENT_SECRET='your-client-secret' \
-  -e SESSION_SECRET='replace-with-at-least-32-random-bytes' \
+docker run --rm -p 8080:8080 --env-file .env \
   ghcr.io/anuragrao04/aidocs:latest
 ```
 
-Open <http://localhost:8080>.
+Open <http://localhost:8080>. See `.env.example` for every variable; the
+reference tables below document them too.
 
 For production, sit aidocs behind a TLS-terminating reverse proxy (nginx,
 Caddy, Cloudflare, ALB, etc.) and set `APP_ORIGIN` / `RENDER_ORIGIN` to

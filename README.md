@@ -56,25 +56,19 @@ bin/aidocs
 
 ## Run with Docker
 
-Build the application container:
+Multi-arch release images (`linux/amd64`, `linux/arm64`) are published to both
+GitHub Container Registry and Docker Hub:
 
 ```bash
-docker build -t aidocs:local .
+docker pull ghcr.io/anuragrao04/aidocs:latest   # GHCR
+docker pull anuragrao04/aidocs:latest           # Docker Hub
 ```
 
-Run it with Postgres, S3-compatible storage, and Google OAuth configured:
+Copy [`.env.example`](.env.example) to `.env`, fill it in, and run (pin an exact
+tag or digest in production rather than `:latest`):
 
 ```bash
-docker run --rm -p 8080:8080 \
-  -e DATABASE_URL='postgres://user:pass@host.docker.internal:5432/aidocs?sslmode=disable' \
-  -e BLOB_BUCKET='aidocs' \
-  -e BLOB_REGION='us-east-1' \
-  -e APP_ORIGIN='http://localhost:8080' \
-  -e RENDER_ORIGIN='http://localhost:8080' \
-  -e GOOGLE_OAUTH_CLIENT_ID='your-client-id' \
-  -e GOOGLE_OAUTH_CLIENT_SECRET='your-client-secret' \
-  -e SESSION_SECRET='replace-with-at-least-32-random-bytes' \
-  aidocs:local
+docker run --rm -p 8080:8080 --env-file .env ghcr.io/anuragrao04/aidocs:latest
 ```
 
 See [Self-hosting](docs/self-hosting.md) for production setup and all environment variables. A Kubernetes Helm chart is available in [`charts/aidocs`](charts/aidocs).
