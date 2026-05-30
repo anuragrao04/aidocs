@@ -1,4 +1,4 @@
-// Shared domain constants for comment statuses, roles, and visibility values.
+// Shared domain constants for comment statuses and roles.
 export const COMMENT_STATUS = {
   open: "open",
   resolved: "resolved",
@@ -24,12 +24,10 @@ export const ROLES = [
 ] as const;
 export const DEFAULT_ROLE = "commenter";
 
-export const VISIBILITIES = [
-  { value: "private", label: "Private" },
-  { value: "org", label: "Org visible" },
-  { value: "link", label: "Anyone with link" },
-] as const;
-export const DEFAULT_VISIBILITY = "private";
+// GENERAL_ACCESS_NONE is the sentinel role for "no general access" (the
+// "anyone" grant is absent). The visible label comes from the server's
+// everyone_label.
+export const GENERAL_ACCESS_NONE = "none";
 
 // Bot addresses end in `.bot`. The server enforces this; the client uses it
 // only for inline hints.

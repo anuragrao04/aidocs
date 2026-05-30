@@ -14,13 +14,18 @@ import {
 } from "@/components/ui/sheet";
 import { api } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
-import { ROLES, DEFAULT_ROLE } from "@/lib/constants";
+import { ROLES, DEFAULT_ROLE, GENERAL_ACCESS_NONE } from "@/lib/constants";
 
 export function ShareSheet({ docId }: { docId: string }) {
   const q = useQueryClient();
   const grants = useQuery({
     queryKey: queryKeys.grants(docId),
     queryFn: () => api.listGrants(docId),
+  });
+  const config = useQuery({
+    queryKey: ["config"],
+    queryFn: () => api.getConfig(),
+    staleTime: Infinity,
   });
   const [address, setAddress] = useState("");
   const [role, setRole] = useState(DEFAULT_ROLE);
@@ -35,6 +40,23 @@ export function ShareSheet({ docId }: { docId: string }) {
       toast.error(errorMessage(e, "Couldn't share.")),
   });
   const items = grants.data?.items || [];
+  const anyoneGrant = items.find((g) => g.principal?.type === "anyone");
+  const namedItems = items.filter((g) => g.principal?.type !== "anyone");
+  const everyoneLabel = config.data?.everyone_label || "Everyone on this server";
+  const general = useMutation({
+    mutationFn: async (next: string) => {
+      if (next === GENERAL_ACCESS_NONE) {
+        if (anyoneGrant) await api.deleteGrant(docId, anyoneGrant.id);
+        return;
+      }
+      await api.setGeneralAccess(docId, next);
+    },
+    onSuccess: () => {
+      toast.success("General access updated.");
+      q.invalidateQueries({ queryKey: queryKeys.grants(docId) });
+    },
+    onError: (e) => toast.error(errorMessage(e, "Couldn't update general access.")),
+  });
   return (
     <SheetContent>
       <SheetHeader>
@@ -95,23 +117,48 @@ export function ShareSheet({ docId }: { docId: string }) {
               <div className="text-xs text-[var(--color-danger)]">
                 Could not load access list.
               </div>
-            ) : items.length === 0 ? (
+            ) : namedItems.length === 0 ? (
               <div className="text-xs text-[var(--color-fg-muted)]">
-                No grants yet.
+                No people or bots added yet.
               </div>
             ) : (
-              items.map((g) => (
+              namedItems.map((g) => (
                 <div
                   key={g.id}
                   className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
                 >
                   <span className="truncate">
-                    {g.principal?.email || g.principal?.id}
+                    {g.principal?.email ||
+                      g.principal?.name ||
+                      g.principal?.id}
+                    {g.principal?.type === "service_account" ? " (bot)" : ""}
                   </span>
                   <Badge variant="muted">{g.role}</Badge>
                 </div>
               ))
             )}
+          </div>
+        </div>
+        <div className="mt-6">
+          <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-[var(--color-fg-muted)]">
+            General access
+          </h4>
+          <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm">
+            <span className="truncate">{everyoneLabel}</span>
+            <select
+              value={anyoneGrant?.role || GENERAL_ACCESS_NONE}
+              disabled={general.isPending}
+              onChange={(e) => general.mutate(e.target.value)}
+              aria-label="General access role"
+              className="h-8 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] px-2 text-sm"
+            >
+              <option value={GENERAL_ACCESS_NONE}>No access</option>
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </SheetBody>

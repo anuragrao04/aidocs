@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Center, Skeleton, EmptyState } from "@/components/ui/misc";
 import {
   Dropdown,
@@ -35,7 +34,6 @@ import { HtmlFileInput, useStagedFile } from "@/components/ui/upload";
 import { DeleteDocumentDialog } from "@/components/delete-document-dialog";
 import { api, docID, docTitle, type Document } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
-import { VISIBILITIES, DEFAULT_VISIBILITY } from "@/lib/constants";
 
 export function DocumentsPage() {
   const docs = useQuery({
@@ -135,7 +133,6 @@ function DocTable({ items }: { items: Document[] }) {
           <tr>
             <th className="px-4 py-2.5 text-left font-medium">Title</th>
             <th className="px-4 py-2.5 text-left font-medium">ID</th>
-            <th className="px-4 py-2.5 text-left font-medium">Visibility</th>
             <th className="w-12 px-2 py-2.5"></th>
           </tr>
         </thead>
@@ -173,11 +170,6 @@ function DocRow({ doc }: { doc: Document }) {
       </td>
       <td className="px-4 py-3 font-mono text-xs text-[var(--color-fg-muted)]">
         {docID(doc)}
-      </td>
-      <td className="px-4 py-3">
-        <Badge variant="muted">
-          {(doc.visibility || DEFAULT_VISIBILITY).toLowerCase()}
-        </Badge>
       </td>
       <td className="px-2 py-3">
         <DeleteDocumentDialog
@@ -256,12 +248,11 @@ function UploadBackupDialog({ trigger }: { trigger: React.ReactNode }) {
   const q = useQueryClient();
   const nav = useNavigate();
   const [title, setTitle] = useState("");
-  const [visibility, setVisibility] = useState(DEFAULT_VISIBILITY);
   const { file, setFile, reset } = useStagedFile();
   const [open, setOpen] = useState(false);
   const m = useMutation({
     mutationFn: () =>
-      api.createDocument(title || file?.name || "Untitled", visibility, file!),
+      api.createDocument(title || file?.name || "Untitled", file!),
     onSuccess: (r) => {
       q.invalidateQueries({ queryKey: queryKeys.documents() });
       toast.success("Document uploaded.");
@@ -295,18 +286,6 @@ function UploadBackupDialog({ trigger }: { trigger: React.ReactNode }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <select
-            value={visibility}
-            onChange={(e) => setVisibility(e.target.value)}
-            aria-label="Document visibility"
-            className="h-9 w-full rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
-          >
-            {VISIBILITIES.map((v) => (
-              <option key={v.value} value={v.value}>
-                {v.label}
-              </option>
-            ))}
-          </select>
           <HtmlFileInput onFile={setFile} />
           <DialogFooter>
             <Button

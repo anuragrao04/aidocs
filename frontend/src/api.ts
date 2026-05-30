@@ -1,5 +1,5 @@
 export type Principal = {
-  type: "user" | "service_account";
+  type: "user" | "service_account" | "anyone";
   id: string;
   email?: string;
   name?: string;
@@ -8,9 +8,13 @@ export type Principal = {
 export type Document = {
   id: string;
   title: string;
-  visibility: string;
   owner?: Principal;
   current_version_id?: string;
+};
+export type ServerConfig = {
+  deployment: "public" | "org";
+  org_name: string;
+  everyone_label: string;
 };
 export type Version = {
   id: string;
@@ -106,10 +110,10 @@ export const api = {
     `/v1/auth/google/start?mode=web&redirect=${encodeURIComponent(redirect)}`,
   listDocuments: () => request<{ items: Document[] }>("/v1/documents"),
   getDocument: (id: string) => request<Document>(`/v1/documents/${id}`),
-  createDocument: (title: string, visibility: string, file: File) => {
+  getConfig: () => request<ServerConfig>("/v1/config"),
+  createDocument: (title: string, file: File) => {
     const fd = new FormData();
     fd.set("title", title);
-    fd.set("visibility", visibility);
     fd.set("file", file);
     return request<{ id: string; current_version_id: string }>(
       "/v1/documents",
@@ -172,6 +176,22 @@ export const api = {
     request<Grant>(`/v1/documents/${doc}/grants`, {
       method: "POST",
       body: JSON.stringify({ address, role }),
+    }),
+  // setGeneralAccess upserts the "anyone" grant (everyone who can reach this
+  // server). Pass role "" / null to remove it (no general access).
+  setGeneralAccess: (doc: string, role: string) =>
+    request<Grant>(`/v1/documents/${doc}/grants`, {
+      method: "POST",
+      body: JSON.stringify({ principal: { type: "anyone" }, role }),
+    }),
+  updateGrant: (doc: string, grantId: string, role: string) =>
+    request<Grant>(`/v1/documents/${doc}/grants/${grantId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+  deleteGrant: (doc: string, grantId: string) =>
+    request<void>(`/v1/documents/${doc}/grants/${grantId}`, {
+      method: "DELETE",
     }),
   listServiceAccounts: () =>
     request<{ items: ServiceAccount[] }>("/v1/service-accounts"),
