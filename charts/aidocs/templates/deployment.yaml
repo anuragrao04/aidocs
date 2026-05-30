@@ -39,8 +39,8 @@ spec:
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
           env:
-            - name: AIDOCS_ADDR
-              value: ":{{ .Values.containerPort }}"
+            - name: AIDOCS_PORT
+              value: {{ .Values.containerPort | quote }}
             - name: APP_ORIGIN
               value: {{ required "origins.app is required" .Values.origins.app | quote }}
             - name: RENDER_ORIGIN

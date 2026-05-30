@@ -24,5 +24,5 @@ WORKDIR /app
 COPY --from=builder /out/aidocs-server /usr/local/bin/aidocs-server
 COPY --from=builder /out/aidocs /usr/local/bin/aidocs
 EXPOSE 8080
-ENV AIDOCS_ADDR=:8080
+ENV AIDOCS_PORT=8080
 CMD ["aidocs-server"]

@@ -27,10 +27,11 @@ import (
 // @in header
 // @name Authorization
 func main() {
-	addr := os.Getenv("AIDOCS_ADDR")
-	if addr == "" {
-		addr = ":8080"
+	port := os.Getenv("AIDOCS_PORT")
+	if port == "" {
+		port = "8080"
 	}
+	addr := ":" + port
 	metricsPort := os.Getenv("AIDOCS_METRICS_PORT")
 	if metricsPort == "" {
 		metricsPort = "9090"

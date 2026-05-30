@@ -289,7 +289,7 @@ Terminate TLS at nginx, Caddy, or any reverse proxy of your choice.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `AIDOCS_ADDR` | `:8080` | Public app/API listen address. |
+| `AIDOCS_PORT` | `8080` | Public app/API listen port. |
 | `AIDOCS_METRICS_PORT` | `9090` | Port for the separate listener that serves `/metrics`. Keep private (scrape over internal networking); never give it a public domain. |
 | `AIDOCS_MIGRATE` | `true` | Run database migrations on boot. Set `false` to skip. |
 | `AIDOCS_COMMIT_SHA` / `COMMIT_SHA` | unset | Build revision exposed at `/commit.txt`. |
