@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Check,
@@ -37,6 +37,12 @@ const AGENT_TARGETS = [
 export function StartPage() {
   const { state, setStep, skip } = useOnboarding();
   const { done, total } = onboardingProgress(state);
+  const nav = useNavigate();
+
+  const skipTutorial = () => {
+    skip();
+    nav("/app/documents");
+  };
 
   const allRequiredDone =
     state.steps.cli_installed &&
@@ -61,7 +67,7 @@ export function StartPage() {
           </p>
         </div>
         <button
-          onClick={skip}
+          onClick={skipTutorial}
           className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-muted)] hover:text-[var(--color-fg)]"
         >
           Skip tutorial <X className="h-3 w-3" />
