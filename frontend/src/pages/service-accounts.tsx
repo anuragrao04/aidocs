@@ -428,7 +428,10 @@ function NewBotDialog({
             </DialogHeader>
             <CodeBlock>{result.name}</CodeBlock>
             <div className="mt-5 rounded-[10px] border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/10 p-3">
-              <div className="mb-1 text-sm font-semibold text-[var(--color-warning)]">
+              <div className="mb-1 text-xs font-medium uppercase tracking-wide text-[var(--color-fg-muted)]">
+                Bot key
+              </div>
+              <div className="mb-2 text-sm font-semibold text-[var(--color-warning)]">
                 Copy this key now — you won't see it again.
               </div>
               <CodeBlock>{result.token}</CodeBlock>
