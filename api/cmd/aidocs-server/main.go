@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
@@ -30,6 +31,11 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
+	metricsPort := os.Getenv("AIDOCS_METRICS_PORT")
+	if metricsPort == "" {
+		metricsPort = "9090"
+	}
+	metricsAddr := ":" + metricsPort
 
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
@@ -111,6 +117,16 @@ func main() {
 		server.WithAuthenticator(auth.DBAuthenticator{Resolver: store, SessionSecret: sessionSecret}),
 		server.WithStateStore(auth.NewPostgresStateStore(store.Pool())),
 	)
+
+	// Serve Prometheus metrics on a separate listener so /metrics is kept off
+	// the public app port (expose only `addr` publicly; scrape metricsAddr over
+	// private networking).
+	go func() {
+		log.Printf("metrics listening on %s", metricsAddr)
+		if err := http.ListenAndServe(metricsAddr, server.MetricsHandler()); err != nil {
+			log.Fatalf("metrics server: %v", err)
+		}
+	}()
 
 	if err := srv.Run(addr); err != nil {
 		log.Fatal(err)

@@ -119,7 +119,6 @@ func (s *Server) Run(addr string) error { return s.engine.Run(addr) }
 
 func (s *Server) routes(deps dependencies) {
 	h := handlers{deps: deps}
-	s.engine.GET("/metrics", metricsHandler())
 	s.engine.GET("/.well-known/aidocs.json", h.discovery)
 	s.engine.GET("/commit.txt", h.commitTXT)
 	registerAPIDocsRoutes(s.engine)

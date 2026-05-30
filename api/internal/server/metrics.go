@@ -1,6 +1,7 @@
 package server
 
 import (
+	"net/http"
 	"strconv"
 	"time"
 
@@ -89,9 +90,13 @@ func init() {
 	)
 }
 
-func metricsHandler() gin.HandlerFunc {
-	h := promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
-	return func(c *gin.Context) { h.ServeHTTP(c.Writer, c.Request) }
+// MetricsHandler serves Prometheus metrics. It is mounted on a separate,
+// private listener (see cmd/aidocs-server) so /metrics is never exposed on the
+// public app port.
+func MetricsHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{}))
+	return mux
 }
 
 func prometheusMiddleware() gin.HandlerFunc {

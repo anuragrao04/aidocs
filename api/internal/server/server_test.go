@@ -33,7 +33,7 @@ func TestDiscovery(t *testing.T) {
 func TestMetricsEndpoint(t *testing.T) {
 	h := newTestServer()
 	_ = do(t, h, http.MethodGet, "/v1/me", "", nil)
-	rr := do(t, h, http.MethodGet, "/metrics", "", nil)
+	rr := do(t, server.MetricsHandler(), http.MethodGet, "/metrics", "", nil)
 	assertStatus(t, rr, http.StatusOK)
 	body := rr.Body.String()
 	for _, want := range []string{"aidocs_http_requests_total", "aidocs_auth_attempts_total", "go_goroutines"} {
@@ -45,9 +45,9 @@ func TestMetricsEndpoint(t *testing.T) {
 
 func TestAuthFailureMetricIncrements(t *testing.T) {
 	h := newTestServer()
-	before := scrapeMetric(t, h, "aidocs_auth_attempts_total", map[string]string{"kind": "request", "outcome": "failure"})
+	before := scrapeMetric(t, "aidocs_auth_attempts_total", map[string]string{"kind": "request", "outcome": "failure"})
 	_ = do(t, h, http.MethodGet, "/v1/me", "", nil)
-	after := scrapeMetric(t, h, "aidocs_auth_attempts_total", map[string]string{"kind": "request", "outcome": "failure"})
+	after := scrapeMetric(t, "aidocs_auth_attempts_total", map[string]string{"kind": "request", "outcome": "failure"})
 	if after != before+1 {
 		t.Fatalf("auth failure counter = %v, want %v", after, before+1)
 	}
@@ -55,16 +55,16 @@ func TestAuthFailureMetricIncrements(t *testing.T) {
 
 func TestDocumentCreateMetricsIncrement(t *testing.T) {
 	h := newTestServer()
-	docBefore := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "actor_type": "user"})
-	verBefore := scrapeMetric(t, h, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
+	docBefore := scrapeMetric(t, "aidocs_document_events_total", map[string]string{"event": "created", "actor_type": "user"})
+	verBefore := scrapeMetric(t, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
 	body, contentType := multipartBody(t, map[string]string{"title": "Metrics doc"}, "file", "doc.html", "<html><body>metrics</body></html>")
 	rr := doRaw(t, h, http.MethodPost, "/v1/documents", body, map[string]string{
 		"Content-Type":     contentType,
 		"X-Test-Principal": "user:usr_1:anurag@example.com:Anurag",
 	})
 	assertStatus(t, rr, http.StatusCreated)
-	docAfter := scrapeMetric(t, h, "aidocs_document_events_total", map[string]string{"event": "created", "actor_type": "user"})
-	verAfter := scrapeMetric(t, h, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
+	docAfter := scrapeMetric(t, "aidocs_document_events_total", map[string]string{"event": "created", "actor_type": "user"})
+	verAfter := scrapeMetric(t, "aidocs_version_events_total", map[string]string{"event": "created_initial", "actor_type": "user"})
 	if docAfter != docBefore+1 {
 		t.Fatalf("document create counter = %v, want %v", docAfter, docBefore+1)
 	}
@@ -705,9 +705,11 @@ func multipartBody(t *testing.T, fields map[string]string, fileField, fileName, 
 	return &b, w.FormDataContentType()
 }
 
-func scrapeMetric(t *testing.T, h http.Handler, name string, labels map[string]string) float64 {
+func scrapeMetric(t *testing.T, name string, labels map[string]string) float64 {
 	t.Helper()
-	rr := do(t, h, http.MethodGet, "/metrics", "", nil)
+	// Metrics are served on a separate listener; the package-global registry is
+	// shared, so scrape MetricsHandler directly.
+	rr := do(t, server.MetricsHandler(), http.MethodGet, "/metrics", "", nil)
 	assertStatus(t, rr, http.StatusOK)
 	for _, line := range strings.Split(rr.Body.String(), "\n") {
 		if line == "" || strings.HasPrefix(line, "#") || !strings.HasPrefix(line, name) {
