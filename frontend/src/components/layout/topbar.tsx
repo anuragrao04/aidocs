@@ -5,7 +5,6 @@ import {
   Monitor,
   Moon,
   Rocket,
-  Sparkles,
   Sun,
   Terminal,
   User as UserIcon,
@@ -35,7 +34,7 @@ export function TopBar({
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)]/80 px-5 backdrop-blur">
       <Link to="/app/documents" className="flex items-center gap-2 font-semibold">
-        <Sparkles className="h-5 w-5 text-[var(--color-accent)]" />
+        <img src="/favicon.svg" alt="" className="h-10 w-10" />
         aidocs
       </Link>
       <div className="flex items-center gap-2">

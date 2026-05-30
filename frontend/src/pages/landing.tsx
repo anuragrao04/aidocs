@@ -46,7 +46,7 @@ function Nav() {
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-bg)]/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
         <Link to="/" className="flex items-center gap-2 font-semibold">
-          <Sparkles className="h-5 w-5 text-[var(--color-accent)]" />
+          <img src="/favicon.svg" alt="" className="h-10 w-10" />
           aidocs
         </Link>
         <nav className="flex items-center gap-2">
