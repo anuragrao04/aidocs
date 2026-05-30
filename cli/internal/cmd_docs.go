@@ -13,8 +13,8 @@ import (
 
 func docsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "docs", Short: "Manage documents"}
-	var title, vis string
-	create := &cobra.Command{Use: "create <file>", Short: "Create a document from an HTML file", Long: "Create a document from a single self-contained HTML file.\n\nRun 'aidocs guidelines' for authoring rules (single-file, base64 images, reader theme).", Example: "  aidocs docs create report.html --title 'Report' --visibility private", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	var title string
+	create := &cobra.Command{Use: "create <file>", Short: "Create a document from an HTML file", Long: "Create a document from a single self-contained HTML file.\n\nThe new document is private. Share it with people, bots, or everyone using 'aidocs docs grants add'.\n\nRun 'aidocs guidelines' for authoring rules (single-file, base64 images, reader theme).", Example: "  aidocs docs create report.html --title 'Report'", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		data, fn, err := readFileArg(args[0])
 		if err != nil {
 			return err
@@ -27,32 +27,23 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 			return err
 		}
 		return action(g, out, func(c *Client) ([]byte, error) {
-			return c.multipart("/v1/documents", map[string]string{"title": title, "visibility": first(vis, "private")}, "file", fn, data)
+			return c.multipart("/v1/documents", map[string]string{"title": title}, "file", fn, data)
 		}, func(m map[string]any) string {
 			id := fmt.Sprint(value(m, "id"))
 			return fmt.Sprintf("Created document %q (%s). Review it at %s", title, id, browserURL(cl.Base, "/documents/%s", id))
 		})
 	}}
 	create.Flags().StringVar(&title, "title", "", "document title (defaults to the file name)")
-	create.Flags().StringVar(&vis, "visibility", "private", "document visibility: private or public")
-	var ut, uv string
-	update := &cobra.Command{Use: "update <doc_id>", Short: "Update document metadata", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		body := map[string]any{}
-		if cmd.Flags().Changed("title") {
-			body["title"] = ut
-		}
-		if cmd.Flags().Changed("visibility") {
-			body["visibility"] = uv
-		}
-		if len(body) == 0 {
-			return errors.New("nothing to update; pass --title and/or --visibility")
+	var ut string
+	update := &cobra.Command{Use: "update <doc_id>", Short: "Update document metadata", Long: "Rename a document. Sharing is managed separately with 'aidocs docs grants'.", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if !cmd.Flags().Changed("title") {
+			return errors.New("nothing to update; pass --title")
 		}
 		return action(g, out, func(c *Client) ([]byte, error) {
-			return c.doJSON("PATCH", apiPath("/v1/documents/%s", args[0]), body)
-		}, func(map[string]any) string { return "Updated document " + args[0] + "." })
+			return c.doJSON("PATCH", apiPath("/v1/documents/%s", args[0]), map[string]any{"title": ut})
+		}, func(map[string]any) string { return "Renamed document " + args[0] + "." })
 	}}
 	update.Flags().StringVar(&ut, "title", "", "new document title")
-	update.Flags().StringVar(&uv, "visibility", "", "new visibility: private or public")
 	del := mutate(g, out, "delete <doc_id>", "Delete a document", "DELETE", "/v1/documents/%s", 1, func(a []string) string { return "Deleted document " + a[0] + "." })
 	c.AddCommand(simple(g, out, "list", "GET", "/v1/documents", 0), create, simplePath(g, out, "show", "GET", "/v1/documents/%s"), update, del, pullCmd(g, out), docsPushCmd(g, out), versionsCmd(g, out), commentsCmd(g, out), grantsCmd(g, out))
 	return c
@@ -61,25 +52,36 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "grants", Short: "Manage document grants"}
 	var principal, address, role string
+	var everyone bool
 	add := &cobra.Command{
 		Use:   "add <doc_id>",
-		Short: "Share a doc with a person or bot",
-		Long: "Share a doc by passing an email or bot address.\n\n" +
+		Short: "Share a doc with a person, bot, or everyone",
+		Long: "Share a doc by passing an email or bot address, or use --everyone to grant\n" +
+			"access to everyone who can reach this server (anyone with the link on a\n" +
+			"public deployment, or everyone in the org on an org deployment).\n\n" +
 			"Examples:\n" +
-			"  aidocs grants add doc_… --to anurag@razorpay.com --role commenter\n" +
-			"  aidocs grants add doc_… --to n8n-prod@brave.otter.bot --role editor",
+			"  aidocs docs grants add doc_… --to anurag@razorpay.com --role commenter\n" +
+			"  aidocs docs grants add doc_… --to n8n-prod@brave.otter.bot --role editor\n" +
+			"  aidocs docs grants add doc_… --everyone --role viewer",
 		Args: exactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{"role": role}
+			var target string
 			switch {
+			case everyone && (address != "" || principal != ""):
+				return errors.New("--everyone cannot be combined with --to or --principal")
+			case everyone:
+				body["principal"] = map[string]any{"type": "anyone"}
+				target = everyoneLabelFor(g)
 			case address != "":
 				body["address"] = address
+				target = address
 			case principal != "":
 				body["principal"] = parsePrincipal(principal)
+				target = principal
 			default:
-				return errors.New("pass --to <email-or-bot-address>")
+				return errors.New("pass --to <email-or-bot-address> or --everyone")
 			}
-			target := first(address, principal)
 			return action(g, out, func(c *Client) ([]byte, error) {
 				return c.doJSON("POST", apiPath("/v1/documents/%s/grants", args[0]), body)
 			}, func(m map[string]any) string {
@@ -88,8 +90,9 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 		},
 	}
 	add.Flags().StringVar(&address, "to", "", "email or bot address (e.g. anurag@razorpay.com or n8n@brave.otter.bot)")
+	add.Flags().BoolVar(&everyone, "everyone", false, "share with everyone who can reach this server")
 	add.Flags().StringVar(&principal, "principal", "", "legacy: sa:<id> or user:<email>")
-	add.Flags().StringVar(&role, "role", "viewer", "viewer, commenter, editor, or owner")
+	add.Flags().StringVar(&role, "role", "viewer", "viewer, commenter, or editor")
 	var r string
 	upd := &cobra.Command{Use: "update <doc_id> <grant_id>", Short: "Update a grant role", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		return action(g, out, func(c *Client) ([]byte, error) {

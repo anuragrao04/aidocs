@@ -17,6 +17,7 @@ import (
 func e2eMux(t *testing.T) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/me", jsonH(map[string]any{"principal": map[string]any{"type": "user", "id": "usr_1"}, "user": map[string]any{"id": "usr_1", "email": "me@example.com", "name": "Me"}}))
+	mux.HandleFunc("/v1/config", jsonH(map[string]any{"deployment": "public", "org_name": "", "everyone_label": "Anyone with the link"}))
 	mux.HandleFunc("/v1/documents", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -150,7 +151,7 @@ func TestCommandOutputsAreConversational(t *testing.T) {
 	}{
 		{[]string{"auth", "whoami"}, []string{"me@example.com", "server=" + srv.URL}},
 		{[]string{"docs", "create", html}, []string{"Created document", "doc_new"}},
-		{[]string{"docs", "update", "doc_1", "--title", "New"}, []string{"Updated document", "doc_1"}},
+		{[]string{"docs", "update", "doc_1", "--title", "New"}, []string{"Renamed document", "doc_1"}},
 		{[]string{"docs", "pull", "doc_1", "--out", out}, []string{"Pulled version", "doc_1"}},
 		{[]string{"docs", "push", "doc_1", html}, []string{"Pushed version", "ver_2"}},
 		{[]string{"docs", "comments", "create", "doc_1", "--body", "hi", "--quote", "x", "--version", "ver_1"}, []string{"Added comment"}},
@@ -158,6 +159,7 @@ func TestCommandOutputsAreConversational(t *testing.T) {
 		{[]string{"docs", "comments", "resolve", "doc_1", "cmt_1"}, []string{"Resolved comment", "cmt_1"}},
 		{[]string{"docs", "comments", "reopen", "doc_1", "cmt_1"}, []string{"Reopened comment", "cmt_1"}},
 		{[]string{"docs", "grants", "add", "doc_1", "--to", "a@b.com", "--role", "viewer"}, []string{"Shared", "a@b.com", "viewer"}},
+		{[]string{"docs", "grants", "add", "doc_1", "--everyone", "--role", "viewer"}, []string{"Shared", "viewer"}},
 		{[]string{"docs", "grants", "revoke", "doc_1", "gr_1"}, []string{"Revoked grant", "gr_1"}},
 		{[]string{"sa", "update", "sa_1", "--disable"}, []string{"Disabled service account", "sa_1"}},
 		{[]string{"sa", "key", "create", "sa_1"}, []string{"Created key", "Copy this key"}},
@@ -196,7 +198,7 @@ func TestJSONOutputStaysMachineReadable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	if strings.Contains(got, "\u2713") || strings.Contains(got, "Updated document") {
+	if strings.Contains(got, "\u2713") || strings.Contains(got, "Renamed document") {
 		t.Fatalf("--json output should be the raw payload, got %q", got)
 	}
 	var m map[string]any
