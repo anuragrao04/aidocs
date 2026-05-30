@@ -1,6 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import {
+  Check,
   LogOut,
+  Monitor,
   Moon,
   Rocket,
   Sparkles,
@@ -76,22 +78,24 @@ export function TopBar({
             </DropdownItem>
             <DropdownSeparator />
             <DropdownLabel>Theme</DropdownLabel>
-            <DropdownItem
-              onSelect={(e) => {
-                e.preventDefault();
-                setTheme(theme === "dark" ? "light" : "dark");
-              }}
-            >
-              {theme === "dark" ? (
-                <>
-                  <Sun className="h-4 w-4" /> Light mode
-                </>
-              ) : (
-                <>
-                  <Moon className="h-4 w-4" /> Dark mode
-                </>
-              )}
-            </DropdownItem>
+            {(
+              [
+                { value: "light", label: "Light", icon: Sun },
+                { value: "dark", label: "Dark", icon: Moon },
+                { value: "system", label: "System", icon: Monitor },
+              ] as const
+            ).map(({ value, label, icon: Icon }) => (
+              <DropdownItem
+                key={value}
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setTheme(value);
+                }}
+              >
+                <Icon className="h-4 w-4" /> {label}
+                {theme === value && <Check className="ml-auto h-4 w-4" />}
+              </DropdownItem>
+            ))}
             <DropdownSeparator />
             <DropdownItem
               onSelect={() => {

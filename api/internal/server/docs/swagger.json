@@ -1265,7 +1265,7 @@
                 "name": {
                     "type": "string"
                 },
-                "pictureURL": {
+                "picture_url": {
                     "type": "string"
                 },
                 "type": {
@@ -1287,7 +1287,7 @@
         "repo.Document": {
             "type": "object",
             "properties": {
-                "currentVersionID": {
+                "current_version_id": {
                     "type": "string"
                 },
                 "id": {
@@ -1307,10 +1307,10 @@
         "repo.Grant": {
             "type": "object",
             "properties": {
-                "documentID": {
+                "document_id": {
                     "type": "string"
                 },
-                "grantedBy": {
+                "granted_by": {
                     "$ref": "#/definitions/auth.Principal"
                 },
                 "id": {
@@ -1379,13 +1379,13 @@
         "repo.Version": {
             "type": "object",
             "properties": {
-                "changeSummary": {
+                "change_summary": {
                     "type": "string"
                 },
-                "createdBy": {
+                "created_by": {
                     "$ref": "#/definitions/auth.Principal"
                 },
-                "documentID": {
+                "document_id": {
                     "type": "string"
                 },
                 "id": {

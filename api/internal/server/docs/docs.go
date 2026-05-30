@@ -1272,7 +1272,7 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "pictureURL": {
+                "picture_url": {
                     "type": "string"
                 },
                 "type": {
@@ -1294,7 +1294,7 @@ const docTemplate = `{
         "repo.Document": {
             "type": "object",
             "properties": {
-                "currentVersionID": {
+                "current_version_id": {
                     "type": "string"
                 },
                 "id": {
@@ -1314,10 +1314,10 @@ const docTemplate = `{
         "repo.Grant": {
             "type": "object",
             "properties": {
-                "documentID": {
+                "document_id": {
                     "type": "string"
                 },
-                "grantedBy": {
+                "granted_by": {
                     "$ref": "#/definitions/auth.Principal"
                 },
                 "id": {
@@ -1386,13 +1386,13 @@ const docTemplate = `{
         "repo.Version": {
             "type": "object",
             "properties": {
-                "changeSummary": {
+                "change_summary": {
                     "type": "string"
                 },
-                "createdBy": {
+                "created_by": {
                     "$ref": "#/definitions/auth.Principal"
                 },
-                "documentID": {
+                "document_id": {
                     "type": "string"
                 },
                 "id": {
