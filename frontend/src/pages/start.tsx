@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
@@ -26,10 +26,7 @@ type StepKey = keyof OnboardingState["steps"];
 const SKILL_REPO = "github:anuragrao04/aidocs";
 
 const AGENT_TARGETS = [
-  {
-    id: "claude-code",
-    label: "Claude Code",
-  },
+  { id: "claude-code", label: "Claude Code" },
   { id: "codex", label: "Codex" },
   { id: "cursor", label: "Cursor" },
   { id: "pi", label: "Pi" },
@@ -277,11 +274,10 @@ function Step({
 }
 
 function AgentConfigure() {
-  const [target, setTarget] = useState(AGENT_TARGETS[0].id);
-  const cmd = useMemo(
-    () => `npx skills add ${SKILL_REPO} -s aidocs --all`,
-    [],
-  );
+  // `--all` installs the skill across every coding agent found on the machine,
+  // so the command is the same regardless of which agent you use. The chips
+  // below are a static compatibility list, not a selector (web-04).
+  const cmd = `npx skills add ${SKILL_REPO} -s aidocs --all`;
   return (
     <div>
       <p className="mb-3 text-sm text-[var(--color-fg-muted)]">
@@ -297,18 +293,12 @@ function AgentConfigure() {
         </div>
         <div className="flex flex-wrap gap-1.5">
           {AGENT_TARGETS.map((t) => (
-            <button
+            <span
               key={t.id}
-              onClick={() => setTarget(t.id)}
-              className={cn(
-                "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                target === t.id
-                  ? "border-[var(--color-accent)] bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
-                  : "border-[var(--color-border)] text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]",
-              )}
+              className="rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs text-[var(--color-fg-muted)]"
             >
               {t.label}
-            </button>
+            </span>
           ))}
         </div>
       </div>

@@ -36,6 +36,16 @@ export function CodeBlock({
   className?: string;
 }) {
   const [copied, setCopied] = React.useState(false);
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(children);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard is unavailable in insecure contexts or was denied; leave the
+      // button state untouched so we don't falsely report success.
+    }
+  };
   return (
     <div
       className={cn(
@@ -47,17 +57,18 @@ export function CodeBlock({
         {children}
       </pre>
       {copy && (
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(children);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          }}
-          className="absolute right-2 top-2 rounded-md p-1.5 text-[var(--color-fg-muted)] opacity-0 transition hover:bg-[var(--color-border)] hover:text-[var(--color-fg)] group-hover:opacity-100 focus:opacity-100"
-          aria-label="Copy"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
+        <>
+          <button
+            onClick={onCopy}
+            className="absolute right-2 top-2 rounded-md p-1.5 text-[var(--color-fg-muted)] opacity-0 transition hover:bg-[var(--color-border)] hover:text-[var(--color-fg)] group-hover:opacity-100 focus:opacity-100"
+            aria-label={copied ? "Copied" : "Copy"}
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+          <span className="sr-only" role="status" aria-live="polite">
+            {copied ? "Copied to clipboard" : ""}
+          </span>
+        </>
       )}
     </div>
   );
@@ -127,12 +138,14 @@ export function Avatar({
   src?: string;
   size?: number;
 }) {
-  const initials = (name || "?")
-    .split(/\s+/)
-    .map((x) => x[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials =
+    (name || "?")
+      .split(/\s+/)
+      .map((x) => x[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?";
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => {
     setFailed(false);

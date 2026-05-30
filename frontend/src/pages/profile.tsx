@@ -1,5 +1,5 @@
 import { LogOut, Monitor, Moon, Sun } from "lucide-react";
-import { Avatar } from "@/components/ui/misc";
+import { Avatar, Center, Skeleton } from "@/components/ui/misc";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,7 +16,18 @@ export function ProfilePage() {
   const me = useMe();
   const { theme, setTheme } = useTheme();
   const user = me.data?.user || me.data?.principal;
-  if (!user) return null;
+
+  if (me.isLoading) {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-10">
+        <Skeleton className="mb-6 h-8 w-40" />
+        <Skeleton className="h-28 w-full" />
+      </div>
+    );
+  }
+  if (me.error || !user) {
+    return <Center>Could not load your profile.</Center>;
+  }
   return (
     <div className="mx-auto max-w-2xl px-6 py-10">
       <div className="mb-6">

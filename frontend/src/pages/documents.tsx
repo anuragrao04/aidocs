@@ -11,20 +11,10 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton, EmptyState } from "@/components/ui/misc";
+import { Center, Skeleton, EmptyState } from "@/components/ui/misc";
 import {
   Dropdown,
   DropdownContent,
@@ -40,11 +30,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { HtmlFileInput, useStagedFile } from "@/components/ui/upload";
+import { DeleteDocumentDialog } from "@/components/delete-document-dialog";
 import { api, docID, docTitle, type Document } from "@/api";
+import { queryKeys } from "@/lib/queryKeys";
+import { VISIBILITIES } from "@/lib/constants";
 
 export function DocumentsPage() {
   const docs = useQuery({
-    queryKey: ["documents"],
+    queryKey: queryKeys.documents(),
     queryFn: api.listDocuments,
   });
   const [q, setQ] = useState("");
@@ -79,6 +73,7 @@ export function DocumentsPage() {
       </div>
     );
   }
+  if (docs.error) return <Center>Could not load documents.</Center>;
 
   const empty = (docs.data?.items || []).length === 0;
 
@@ -153,7 +148,7 @@ function DocRow({ doc }: { doc: Document }) {
     mutationFn: () => api.deleteDocument(docID(doc)),
     onSuccess: () => {
       toast.success("Deleted.");
-      q.invalidateQueries({ queryKey: ["documents"] });
+      q.invalidateQueries({ queryKey: queryKeys.documents() });
     },
     onError: (e) =>
       toast.error(e instanceof Error ? e.message : "Delete failed"),
@@ -174,12 +169,14 @@ function DocRow({ doc }: { doc: Document }) {
       </td>
       <td className="px-4 py-3">
         <Badge variant="muted">
-          {(doc.visibility || doc.Visibility || "private").toLowerCase()}
+          {(doc.visibility || "private").toLowerCase()}
         </Badge>
       </td>
       <td className="px-2 py-3">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+        <DeleteDocumentDialog
+          title={docTitle(doc)}
+          onConfirm={() => del.mutate()}
+          trigger={
             <Button
               variant="ghost"
               size="icon"
@@ -188,24 +185,8 @@ function DocRow({ doc }: { doc: Document }) {
             >
               <Trash2 className="h-3.5 w-3.5 text-[var(--color-danger)]" />
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogTitle>Delete “{docTitle(doc)}”?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently removes the document, all versions, and all
-              comments. This cannot be undone.
-            </AlertDialogDescription>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                variant="danger"
-                onClick={() => del.mutate()}
-              >
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+          }
+        />
       </td>
     </tr>
   );
@@ -266,20 +247,23 @@ function UploadBackupCard({ inline }: { inline?: boolean }) {
 
 function UploadBackupDialog({ trigger }: { trigger: React.ReactNode }) {
   const q = useQueryClient();
+  const nav = useNavigate();
   const [title, setTitle] = useState("");
   const [visibility, setVisibility] = useState("private");
-  const [file, setFile] = useState<File | null>(null);
+  const { file, setFile, reset } = useStagedFile();
   const [open, setOpen] = useState(false);
   const m = useMutation({
     mutationFn: () =>
       api.createDocument(title || file?.name || "Untitled", visibility, file!),
     onSuccess: (r) => {
-      q.invalidateQueries({ queryKey: ["documents"] });
+      q.invalidateQueries({ queryKey: queryKeys.documents() });
       toast.success("Document uploaded.");
       setOpen(false);
-      setTimeout(() => (window.location.href = `/app/d/${r.id}`), 300);
+      reset();
+      nav(`/app/d/${r.id}`);
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Upload failed"),
   });
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -307,18 +291,16 @@ function UploadBackupDialog({ trigger }: { trigger: React.ReactNode }) {
           <select
             value={visibility}
             onChange={(e) => setVisibility(e.target.value)}
+            aria-label="Document visibility"
             className="h-9 w-full rounded-[10px] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm"
           >
-            <option value="private">Private</option>
-            <option value="org">Org visible</option>
-            <option value="link">Anyone with link</option>
+            {VISIBILITIES.map((v) => (
+              <option key={v.value} value={v.value}>
+                {v.label}
+              </option>
+            ))}
           </select>
-          <input
-            type="file"
-            accept=".html,text/html"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="text-sm"
-          />
+          <HtmlFileInput onFile={setFile} />
           <DialogFooter>
             <Button
               type="button"

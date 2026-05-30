@@ -1,10 +1,22 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "sonner";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useParams,
+} from "react-router-dom";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { Toaster, toast } from "sonner";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import "./styles.css";
+import { APIError } from "@/api";
 import { ThemeProvider } from "@/lib/theme";
 import { AppShell } from "@/components/layout/app-shell";
 import { LandingPage } from "@/pages/landing";
@@ -16,8 +28,28 @@ import { DevelopersPage } from "@/pages/developers";
 import { ProfilePage } from "@/pages/profile";
 import { StartPage } from "@/pages/start";
 
+function errorMessage(e: unknown): string {
+  if (e instanceof Error && e.message) return e.message;
+  return "Something went wrong.";
+}
+
+// Single source of error UX: queries surface failures (other than auth, which
+// is handled by route guards) and any mutation without its own onError falls
+// back to a toast (web-15, web-22).
 const qc = new QueryClient({
-  defaultOptions: { queries: { refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: { refetchOnWindowFocus: false },
+    mutations: {
+      onError: (e) => toast.error(errorMessage(e)),
+    },
+  },
+  queryCache: new QueryCache({
+    onError: (e) => {
+      if (e instanceof APIError && e.status === 401) return;
+      toast.error(errorMessage(e));
+    },
+  }),
+  mutationCache: new MutationCache(),
 });
 
 function App() {
@@ -63,7 +95,7 @@ function App() {
 }
 
 function LegacyDocRedirect() {
-  const id = window.location.pathname.split("/").pop() || "";
+  const { id = "" } = useParams();
   return <Navigate to={`/app/d/${id}`} replace />;
 }
 

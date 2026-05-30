@@ -27,18 +27,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { api, type ServiceAccount } from "@/api";
 import { publicURL } from "@/lib/config";
+import { queryKeys } from "@/lib/queryKeys";
+import { BOT_DOMAIN_SUFFIX } from "@/lib/constants";
 
 export function ServiceAccountsPage() {
   const q = useQueryClient();
   const sas = useQuery({
-    queryKey: ["service-accounts"],
+    queryKey: queryKeys.serviceAccounts(),
     queryFn: api.listServiceAccounts,
   });
   const [creating, setCreating] = useState(false);
   const items = sas.data?.items || [];
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected =
-    items.find((s) => (s.id || s.ID) === selectedId) || items[0] || null;
+  const selected = items.find((s) => s.id === selectedId) || items[0] || null;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
@@ -59,7 +60,7 @@ export function ServiceAccountsPage() {
         open={creating}
         onOpenChange={setCreating}
         onCreated={(sa) => {
-          q.invalidateQueries({ queryKey: ["service-accounts"] });
+          q.invalidateQueries({ queryKey: queryKeys.serviceAccounts() });
           setSelectedId(sa.id);
         }}
       />
@@ -71,6 +72,10 @@ export function ServiceAccountsPage() {
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
             </>
+          ) : sas.error ? (
+            <div className="rounded-[12px] border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-danger)]">
+              Could not load bots.
+            </div>
           ) : items.length === 0 ? (
             <div className="rounded-[12px] border border-dashed border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-fg-muted)]">
               No bots yet. Create one to share docs with it.
@@ -78,9 +83,8 @@ export function ServiceAccountsPage() {
           ) : (
             <ul className="space-y-1">
               {items.map((sa) => {
-                const id = sa.id || sa.ID || "";
-                const active = (selected?.id || selected?.ID) === id;
-                const disabled = sa.disabled || sa.Disabled;
+                const id = sa.id;
+                const active = selected?.id === id;
                 return (
                   <li key={id}>
                     <button
@@ -89,14 +93,12 @@ export function ServiceAccountsPage() {
                     >
                       <Bot className="h-4 w-4 shrink-0 text-[var(--color-fg-muted)]" />
                       <div className="min-w-0 flex-1">
-                        <div className="truncate font-medium">
-                          {sa.name || sa.Name}
-                        </div>
+                        <div className="truncate font-medium">{sa.name}</div>
                         <div className="truncate font-mono text-[10px] text-[var(--color-fg-muted)]">
                           {id}
                         </div>
                       </div>
-                      {disabled && <Badge variant="warning">disabled</Badge>}
+                      {sa.disabled && <Badge variant="warning">disabled</Badge>}
                     </button>
                   </li>
                 );
@@ -122,13 +124,13 @@ export function ServiceAccountsPage() {
 }
 
 function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
-  const id = sa.id || sa.ID || "";
-  const name = sa.name || sa.Name || "";
-  const disabled = sa.disabled || sa.Disabled || false;
+  const id = sa.id;
+  const name = sa.name;
+  const disabled = sa.disabled || false;
   const q = useQueryClient();
   const url = publicURL();
   const keys = useQuery({
-    queryKey: ["service-account-keys", id],
+    queryKey: queryKeys.serviceAccountKeys(id),
     queryFn: () => api.listServiceAccountKeys(id),
   });
   const [revealToken, setRevealToken] = useState<{
@@ -141,7 +143,7 @@ function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
     onSuccess: (r) => {
       setRevealToken({ token: r.token, keyName });
       setKeyName("default");
-      q.invalidateQueries({ queryKey: ["service-account-keys", id] });
+      q.invalidateQueries({ queryKey: queryKeys.serviceAccountKeys(id) });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -149,15 +151,19 @@ function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
     mutationFn: (keyID: string) => api.revokeServiceAccountKey(id, keyID),
     onSuccess: () => {
       toast.success("Key revoked.");
-      q.invalidateQueries({ queryKey: ["service-account-keys", id] });
+      q.invalidateQueries({ queryKey: queryKeys.serviceAccountKeys(id) });
     },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Could not revoke key"),
   });
   const toggle = useMutation({
     mutationFn: () => api.updateServiceAccount(id, name, !disabled),
     onSuccess: () => {
       toast.success(disabled ? "Enabled." : "Disabled.");
-      q.invalidateQueries({ queryKey: ["service-accounts"] });
+      q.invalidateQueries({ queryKey: queryKeys.serviceAccounts() });
     },
+    onError: (e) =>
+      toast.error(e instanceof Error ? e.message : "Could not update bot"),
   });
 
   return (
@@ -223,7 +229,16 @@ function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
             </Button>
           </form>
           <div className="space-y-1">
-            {keys.data?.items?.length ? (
+            {keys.isLoading ? (
+              <>
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+              </>
+            ) : keys.error ? (
+              <div className="rounded-md border border-dashed border-[var(--color-border)] p-4 text-center text-xs text-[var(--color-danger)]">
+                Could not load keys.
+              </div>
+            ) : keys.data?.items?.length ? (
               keys.data.items.map((k) => (
                 <div
                   key={k.id}
@@ -337,7 +352,9 @@ function NewBotDialog({
   const label = at >= 0 ? trimmed.slice(0, at) : trimmed;
   const domain = at >= 0 ? trimmed.slice(at + 1) : "";
   const hasDomain = at >= 0;
-  const domainLooksValid = !hasDomain || domain.endsWith(".bot");
+  // The server is authoritative for address validation; this is a lightweight
+  // inline hint mirroring its `.bot` rule (web-18).
+  const domainLooksValid = !hasDomain || domain.endsWith(BOT_DOMAIN_SUFFIX);
   const create = useMutation({
     mutationFn: () =>
       api.createServiceAccount(label, hasDomain ? domain : undefined),
@@ -396,7 +413,7 @@ function NewBotDialog({
                 </p>
                 {hasDomain && !domainLooksValid && (
                   <p className="mt-1 text-[11px] text-[var(--color-danger)]">
-                    Addresses must end in .bot.
+                    Addresses must end in {BOT_DOMAIN_SUFFIX}.
                   </p>
                 )}
               </div>

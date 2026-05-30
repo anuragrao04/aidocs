@@ -6,27 +6,17 @@ export type Principal = {
   picture_url?: string;
 };
 export type Document = {
-  ID?: string;
-  id?: string;
-  Title?: string;
-  title?: string;
-  Visibility?: string;
-  visibility?: string;
-  Owner?: Principal;
+  id: string;
+  title: string;
+  visibility: string;
   owner?: Principal;
-  CurrentVersionID?: string;
   current_version_id?: string;
 };
 export type Version = {
-  ID?: string;
-  id?: string;
-  Number?: number;
-  number?: number;
-  DocumentID?: string;
+  id: string;
+  number: number;
   document_id?: string;
-  ChangeSummary?: string;
   change_summary?: string;
-  SHA256?: string;
   sha256?: string;
 };
 export type Anchor = {
@@ -52,21 +42,14 @@ export type Comment = {
   };
 };
 export type Grant = {
-  ID?: string;
-  id?: string;
-  Principal?: Principal;
+  id: string;
   principal?: Principal;
-  Role?: string;
-  role?: string;
+  role: string;
 };
 export type ServiceAccount = {
-  ID?: string;
-  id?: string;
-  Name?: string;
-  name?: string;
-  Disabled?: boolean;
+  id: string;
+  name: string;
   disabled?: boolean;
-  Owner?: Principal;
   owner?: Principal;
 };
 export type ServiceAccountKey = { id: string; name: string };
@@ -79,6 +62,28 @@ export class APIError extends Error {
   ) {
     super(message);
   }
+}
+
+// API responses mix PascalCase (Go struct JSON) and snake_case across
+// endpoints. Normalize every response to a single snake_case shape so call
+// sites never need `d.id || d.ID` style fallbacks (web-02/web-03).
+function toSnakeKey(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .toLowerCase();
+}
+
+function normalizeKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeKeys);
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[toSnakeKey(k)] = normalizeKeys(v);
+    }
+    return out;
+  }
+  return value;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -104,9 +109,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   const ct = res.headers.get("content-type") || "";
-  return (
-    ct.includes("application/json") ? await res.json() : await res.text()
-  ) as T;
+  if (ct.includes("application/json")) {
+    return normalizeKeys(await res.json()) as T;
+  }
+  return (await res.text()) as T;
 }
 
 export const api = {
@@ -151,19 +157,28 @@ export const api = {
     request<{ items: Comment[] }>(
       `/v1/documents/${doc}/comments${version ? `?version_id=${encodeURIComponent(version)}` : ""}`,
     ),
-  createComment: (doc: string, version: string, body: string, quote: string) =>
+  createComment: (
+    doc: string,
+    version: string,
+    body: string,
+    quote: string,
+    anchor?: Partial<Anchor>,
+  ) =>
     request<Comment>(`/v1/documents/${doc}/comments`, {
       method: "POST",
       body: JSON.stringify({
         version_id: version,
         body,
+        // Prefer a real anchor captured from the render bridge; fall back to a
+        // best-effort placeholder when the bridge did not supply selection
+        // offsets. See web-12 and the iframe-bridge contract (server-07).
         anchor: {
           quote,
-          prefix: "",
-          suffix: "",
-          dom_path: "body",
-          start_offset: 0,
-          end_offset: quote.length,
+          prefix: anchor?.prefix ?? "",
+          suffix: anchor?.suffix ?? "",
+          dom_path: anchor?.dom_path ?? "body",
+          start_offset: anchor?.start_offset ?? 0,
+          end_offset: anchor?.end_offset ?? quote.length,
         },
       }),
     }),
@@ -211,9 +226,9 @@ export const api = {
     }),
 };
 
-export const docID = (d: Document) => d.id || d.ID || "";
-export const docTitle = (d: Document) => d.title || d.Title || "Untitled";
-export const currentVersionID = (d: Document) =>
-  d.current_version_id || d.CurrentVersionID || "";
-export const versionID = (v: Version) => v.id || v.ID || "";
-export const versionNumber = (v: Version) => v.number || v.Number || 0;
+export const docID = (d: Partial<Document>) => d.id || "";
+export const docTitle = (d: Partial<Document>) => d.title || "Untitled";
+export const currentVersionID = (d: Partial<Document>) =>
+  d.current_version_id || "";
+export const versionID = (v: Partial<Version>) => v.id || "";
+export const versionNumber = (v: Partial<Version>) => v.number || 0;
