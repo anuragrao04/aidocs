@@ -16,9 +16,10 @@ var bridgeJSSource string
 var wrapperTmpl = template.Must(template.New("wrapper").Parse(`<!doctype html><html><head><meta charset="utf-8"><title>aidocs render</title><style>html,body{margin:0;height:100%;overflow:hidden}#aidocs-doc{border:0;width:100%;height:100vh}.aidocs-mark{background-color:#fef08a!important;color:inherit!important;border-bottom:2px solid #ca8a04!important;cursor:pointer;transition:background-color .15s}.aidocs-mark-active{background-color:#fbbf24!important}</style></head><body><iframe id="aidocs-doc" sandbox="allow-scripts allow-same-origin" srcdoc="{{.SrcDoc}}"></iframe><script>window.__AIDOCS_APP_ORIGIN__={{.AppOriginJS}};({{.BridgeJS}})();</script></body></html>`))
 
 type wrapperData struct {
-	// SrcDoc is pre-escaped HTML for use as a double-quoted attribute value.
-	// Marked template.HTML so html/template does not double-escape it.
-	SrcDoc      template.HTML
+	// SrcDoc is the raw user HTML. html/template escapes it for the
+	// double-quoted srcdoc attribute context (including </script> inside
+	// inline scripts), so no manual escaping is needed.
+	SrcDoc      string
 	AppOriginJS template.JS
 	BridgeJS    template.JS
 }
@@ -29,7 +30,7 @@ type wrapperData struct {
 func renderWrapperHTML(userHTML []byte, appOrigin string) []byte {
 	originJSON, _ := json.Marshal(appOrigin)
 	data := wrapperData{
-		SrcDoc:      template.HTML(htmlEscapeAttr(string(userHTML))),
+		SrcDoc:      string(userHTML),
 		AppOriginJS: template.JS(originJSON),
 		BridgeJS:    template.JS(bridgeJSSource),
 	}
@@ -39,14 +40,4 @@ func renderWrapperHTML(userHTML []byte, appOrigin string) []byte {
 		return []byte("<!doctype html><html><body>render error</body></html>")
 	}
 	return []byte(sb.String())
-}
-
-// htmlEscapeAttr escapes a string for use as an HTML attribute value
-// (double-quoted). The standard escapes cover everything needed for srcdoc.
-func htmlEscapeAttr(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, "\"", "&quot;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	return s
 }

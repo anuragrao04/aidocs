@@ -1,3 +1,5 @@
+//go:build testfixtures
+
 package server_test
 
 import (

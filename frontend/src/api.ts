@@ -208,4 +208,3 @@ export const docTitle = (d: Partial<Document>) => d.title || "Untitled";
 export const currentVersionID = (d: Partial<Document>) =>
   d.current_version_id || "";
 export const versionID = (v: Partial<Version>) => v.id || "";
-export const versionNumber = (v: Partial<Version>) => v.number || 0;

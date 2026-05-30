@@ -43,7 +43,7 @@ jobs:
         run: npm ci --prefix frontend && npm run build --prefix frontend
 
       - name: Test Go
-        run: go test ./...
+        run: go test -tags testfixtures ./...
 
       - name: Build server and CLI
         run: make build-backend build-cli

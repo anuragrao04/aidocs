@@ -9,21 +9,23 @@ import (
 )
 
 func commentsJSON(items []repo.Comment, placementVersionID string, placementHTML []byte) []gin.H {
+	// Stringify the version body once for all placement checks below.
+	haystack := string(placementHTML)
 	out := make([]gin.H, 0, len(items))
 	for _, cm := range items {
-		out = append(out, commentJSON(cm, placementVersionID, placementHTML))
+		out = append(out, commentJSON(cm, placementVersionID, haystack))
 	}
 	return out
 }
 
 // commentPlacement reports whether a comment's selected text still appears in
 // the given version, returning its placement status, a confidence score, and
-// the matched text.
-func commentPlacement(cm repo.Comment, placementVersionID string, placementHTML []byte) (status string, confidence float64, matched string) {
+// the matched text. placementHTML is the already-stringified version body.
+func commentPlacement(cm repo.Comment, placementVersionID, placementHTML string) (status string, confidence float64, matched string) {
 	status = placementAttached
 	confidence = 1.0
 	matched = cm.SelectedText
-	if placementVersionID != cm.VersionID && len(placementHTML) > 0 && !strings.Contains(string(placementHTML), cm.SelectedText) {
+	if placementVersionID != cm.VersionID && len(placementHTML) > 0 && !strings.Contains(placementHTML, cm.SelectedText) {
 		status = placementOrphaned
 		confidence = 0
 		matched = ""
@@ -45,7 +47,7 @@ func principalJSON(p auth.Principal) gin.H {
 	return out
 }
 
-func commentJSON(cm repo.Comment, placementVersionID string, placementHTML []byte) gin.H {
+func commentJSON(cm repo.Comment, placementVersionID, placementHTML string) gin.H {
 	if placementVersionID == "" {
 		placementVersionID = cm.VersionID
 	}

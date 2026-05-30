@@ -78,7 +78,7 @@ func loginCmd(g *globals, out io.Writer) *cobra.Command {
 		go srvHTTP.Serve(ln)
 		defer srvHTTP.Close()
 		loginURL := srv + "/v1/auth/google/start?mode=cli&state=" + url.QueryEscape(state) + "&cli_redirect=" + url.QueryEscape(redirect) + "&code_challenge=" + url.QueryEscape(challenge)
-		fmt.Fprintf(out, "Opening %s\n", loginURL)
+		message(out, g, "Opening "+loginURL)
 		openBrowser(loginURL)
 
 		ctx, cancel := context.WithTimeout(cmd.Context(), loginTimeout)

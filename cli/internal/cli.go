@@ -38,7 +38,23 @@ func Execute(args []string) (string, error) {
 	root := NewRoot(&out)
 	root.SetArgs(args)
 	err := root.Execute()
-	return out.String(), err
+	return out.String(), asUsageError(err)
+}
+
+// asUsageError classifies cobra's untyped "unknown command" error as a
+// usageError so it maps to the usage exit code.
+func asUsageError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var ue usageError
+	if errors.As(err, &ue) {
+		return err
+	}
+	if strings.Contains(err.Error(), "unknown command") {
+		return usageError{err}
+	}
+	return err
 }
 
 func NewRoot(out io.Writer) *cobra.Command {
@@ -111,11 +127,6 @@ func ExitCode(err error) int {
 		return 2
 	}
 	if errors.Is(err, errSADisabled) {
-		return 2
-	}
-	// An unknown subcommand is also a usage error. Cobra reports it without a
-	// distinct error type, so it is matched on the message here.
-	if strings.Contains(err.Error(), "unknown command") {
 		return 2
 	}
 	return 1

@@ -26,7 +26,7 @@ func TestRenderWrapperLeavesScriptSubstringInJSAlone(t *testing.T) {
 	if strings.Contains(out, `\/script`) {
 		t.Fatalf("rendered wrapper still injects backslash before /script: %s", out)
 	}
-	if !strings.Contains(out, `&lt;/script&gt;oops&quot;;&lt;/script&gt;`) {
+	if !strings.Contains(out, `&lt;/script&gt;oops&#34;;&lt;/script&gt;`) {
 		t.Fatalf("expected both inline </script> occurrences to be HTML-entity-encoded; got: %s", out)
 	}
 }

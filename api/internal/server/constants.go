@@ -39,9 +39,9 @@ const renderAudiencePrefix = "render:"
 // googleUserIDPrefix prefixes user IDs minted from a Google subject.
 const googleUserIDPrefix = "usr_google_"
 
-// Environment values
+// Environment values for Config.Environment.
 const (
-	envProduction = "production"
+	EnvProduction = "production"
 	envTest       = "test"
 )
 

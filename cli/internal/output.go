@@ -8,10 +8,10 @@ import (
 	"strings"
 )
 
-// displayFields is the centralized, ordered display schema used to render a
-// resource as a compact key=value row in the default (non-JSON) output. Fields
-// not present in a payload are skipped; fields not listed here are intentionally
-// omitted from the compact view (use --json to see the full payload).
+// displayFields is the ordered set of keys rendered as a compact key=value row
+// in the default (non-JSON) output. Fields absent from a payload are skipped;
+// fields not listed here are omitted from the compact view (use --json for the
+// full payload).
 var displayFields = []string{
 	"id", "document_id", "title", "name", "email", "type", "role", "status",
 	"disabled", "current_version_id", "number", "sha256", "token",

@@ -1,0 +1,318 @@
+package server
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/anuragrao/aidocs/api/internal/auth"
+	"github.com/anuragrao/aidocs/api/internal/bots"
+	"github.com/anuragrao/aidocs/api/internal/repo"
+)
+
+// allocateServiceAccountName creates a service account, retrying with freshly
+// generated random domains until it finds an unused name. It returns the
+// created account, or the last error if every attempt collides.
+func allocateServiceAccountName(c *gin.Context, r repo.Repository, p auth.Principal, label, explicitDomain string) (repo.ServiceAccount, string, error) {
+	explicit := explicitDomain != ""
+	attempts := saNameMaxAttempts
+	if explicit {
+		attempts = 1
+	}
+	var lastErr error
+	for i := 0; i < attempts; i++ {
+		domain := explicitDomain
+		if !explicit {
+			if i < saNameShortDomainAttempts {
+				domain = bots.GenerateDomain()
+			} else {
+				domain = bots.GenerateDomainExtended()
+			}
+		}
+		fullName := bots.Compose(label, domain)
+		sa, err := r.CreateServiceAccount(c.Request.Context(), p, fullName)
+		if err == nil {
+			return sa, fullName, nil
+		}
+		lastErr = err
+		if !errors.Is(err, repo.ErrConflict) {
+			return repo.ServiceAccount{}, "", err
+		}
+	}
+	return repo.ServiceAccount{}, "", lastErr
+}
+
+// CreateServiceAccount godoc
+// @Summary Create service account
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Accept json
+// @Produce json
+// @Success 201 {object} map[string]interface{}
+// @Router /v1/service-accounts [post]
+func (h handlers) createServiceAccount(c *gin.Context) {
+	p := current(c)
+	if p.Type != auth.PrincipalUser {
+		forbidden(c, "user principal required")
+		return
+	}
+	var in struct {
+		Label  string `json:"label"`
+		Domain string `json:"domain"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil {
+		badRequest(c, "Tell us a name for your bot.")
+		return
+	}
+	if err := bots.ValidateLabel(in.Label); err != nil {
+		badRequest(c, "Use letters, numbers, and hyphens for the bot's name.")
+		return
+	}
+	if in.Domain != "" {
+		if err := bots.ValidateDomain(in.Domain); err != nil {
+			badRequest(c, "Addresses must end in .bot.")
+			return
+		}
+	}
+	sa, fullName, err := allocateServiceAccountName(c, h.deps.repository, *p, in.Label, in.Domain)
+	if err != nil {
+		if errors.Is(err, repo.ErrConflict) && in.Domain != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": "address_taken", "message": "Someone already uses " + fullName + ". Try a different address."})
+			return
+		}
+		internalErr(c, err)
+		return
+	}
+	token, hash, err := auth.NewBearerToken("aidocs_sa_")
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	keyID, err := h.deps.repository.CreateServiceAccountKey(c.Request.Context(), sa.ID, "default", hash)
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	incServiceAccount("created", actorType(c))
+	incServiceAccount("key_created", actorType(c))
+	c.JSON(http.StatusCreated, gin.H{
+		"id":       sa.ID,
+		"label":    in.Label,
+		"name":     sa.Name,
+		"owner":    gin.H{"id": sa.Owner.ID, "email": sa.Owner.Email},
+		"disabled": sa.Disabled,
+		"grants":   []any{},
+		"key":      gin.H{"id": keyID, "token": token},
+	})
+}
+
+// CreateOwnershipTransfer godoc
+// @Summary Initiate service account ownership transfer
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Param id path string true "Service account ID"
+// @Success 201 {object} repo.OwnershipTransfer
+// @Router /v1/service-accounts/{id}/transfer [post]
+func (h handlers) createOwnershipTransfer(c *gin.Context) {
+	if !h.needServiceAccountOwner(c, c.Param("id")) {
+		return
+	}
+	var in struct {
+		ToUserEmail string `json:"to_user_email"`
+	}
+	if err := c.ShouldBindJSON(&in); err != nil || in.ToUserEmail == "" {
+		badRequest(c, "to_user_email is required")
+		return
+	}
+	x, err := h.deps.repository.CreateOwnershipTransfer(c.Request.Context(), c.Param("id"), *current(c), in.ToUserEmail)
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, x)
+}
+
+// ListOwnershipTransfers godoc
+// @Summary List service account ownership transfers
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /v1/service-accounts/transfers [get]
+func (h handlers) listOwnershipTransfers(c *gin.Context) {
+	items, err := h.deps.repository.ListOwnershipTransfers(c.Request.Context(), *current(c))
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+// AcceptOwnershipTransfer godoc
+// @Summary Accept ownership transfer
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Param id path string true "Transfer ID"
+// @Success 200 {object} repo.OwnershipTransfer
+// @Router /v1/service-accounts/transfers/{id}/accept [post]
+func (h handlers) acceptOwnershipTransfer(c *gin.Context) {
+	x, err := h.deps.repository.AcceptOwnershipTransfer(c.Request.Context(), c.Param("id"), *current(c))
+	if err != nil {
+		forbidden(c, "not allowed")
+		return
+	}
+	c.JSON(http.StatusOK, x)
+}
+
+// DeclineOwnershipTransfer godoc
+// @Summary Decline ownership transfer
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Param id path string true "Transfer ID"
+// @Success 204
+// @Router /v1/service-accounts/transfers/{id}/decline [post]
+func (h handlers) declineOwnershipTransfer(c *gin.Context) {
+	if err := h.deps.repository.DeclineOwnershipTransfer(c.Request.Context(), c.Param("id"), *current(c)); err != nil {
+		if errors.Is(err, repo.ErrNotFound) {
+			c.JSON(http.StatusConflict, errorResponse("invalid_transfer_state", "transfer is not pending or not found", nil))
+			return
+		}
+		internalErr(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// ListServiceAccounts godoc
+// @Summary List service accounts
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Success 200 {object} map[string]interface{}
+// @Router /v1/service-accounts [get]
+func (h handlers) listServiceAccounts(c *gin.Context) {
+	items, err := h.deps.repository.ListServiceAccounts(c.Request.Context(), *current(c))
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+// PatchServiceAccount godoc
+// @Summary Update service account
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Param id path string true "Service account ID"
+// @Success 200 {object} repo.ServiceAccount
+// @Router /v1/service-accounts/{id} [patch]
+func (h handlers) patchServiceAccount(c *gin.Context) {
+	if !h.needServiceAccountOwner(c, c.Param("id")) {
+		return
+	}
+	var in struct {
+		Name     string `json:"name"`
+		Disabled *bool  `json:"disabled"`
+	}
+	_ = c.ShouldBindJSON(&in)
+	sa, err := h.deps.repository.UpdateServiceAccount(c.Request.Context(), c.Param("id"), in.Name, in.Disabled)
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, sa)
+}
+
+// CreateServiceAccountKey godoc
+// @Summary Create service account key
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Param id path string true "Service account ID"
+// @Success 201 {object} map[string]interface{}
+// @Router /v1/service-accounts/{id}/keys [post]
+func (h handlers) createServiceAccountKey(c *gin.Context) {
+	if !h.needServiceAccountOwner(c, c.Param("id")) {
+		return
+	}
+	var in struct {
+		Name string `json:"name"`
+	}
+	_ = c.ShouldBindJSON(&in)
+	if in.Name == "" {
+		in.Name = "default"
+	}
+	token, hash, err := auth.NewBearerToken("aidocs_sa_")
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	id, err := h.deps.repository.CreateServiceAccountKey(c.Request.Context(), c.Param("id"), in.Name, hash)
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	incServiceAccount("key_created", actorType(c))
+	c.JSON(http.StatusCreated, gin.H{"id": id, "token": token})
+}
+
+// ListServiceAccountKeys godoc
+// @Summary List service account keys
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Param id path string true "Service account ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /v1/service-accounts/{id}/keys [get]
+func (h handlers) listServiceAccountKeys(c *gin.Context) {
+	if !h.needServiceAccountOwner(c, c.Param("id")) {
+		return
+	}
+	items, err := h.deps.repository.ListServiceAccountKeys(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		internalErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+// RevokeServiceAccountKey godoc
+// @Summary Revoke service account key
+// @Tags service-accounts
+// @Security bearerAuth
+// @Security cookieAuth
+// @Param id path string true "Service account ID"
+// @Param key_id path string true "Key ID"
+// @Success 204
+// @Router /v1/service-accounts/{id}/keys/{key_id} [delete]
+func (h handlers) revokeServiceAccountKey(c *gin.Context) {
+	if !h.needServiceAccountOwner(c, c.Param("id")) {
+		return
+	}
+	if err := h.deps.repository.RevokeServiceAccountKey(c.Request.Context(), c.Param("id"), c.Param("key_id")); err != nil {
+		internalErr(c, err)
+		return
+	}
+	incServiceAccount("key_revoked", actorType(c))
+	c.Status(http.StatusNoContent)
+}
+
+func (h handlers) needServiceAccountOwner(c *gin.Context, saID string) bool {
+	p := current(c)
+	if p.Type != auth.PrincipalUser {
+		forbidden(c, "service account owner required")
+		return false
+	}
+	sa, err := h.deps.repository.GetServiceAccount(c.Request.Context(), saID)
+	if err != nil || sa.Owner.ID != p.ID {
+		forbidden(c, "service account owner required")
+		return false
+	}
+	return true
+}

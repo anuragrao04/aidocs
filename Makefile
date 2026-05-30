@@ -35,8 +35,10 @@ dashboards:
 check-dashboards: dashboards
 	git diff --exit-code -- monitoring/grafana/aidocs-dashboard.json
 
+# testfixtures enables the in-memory seeded repo + HTTP handler tests, which
+# live behind a build tag so the fixtures never ship in the production binary.
 test: swagger frontend
-	go test ./...
+	go test -tags testfixtures ./...
 
 clean:
 	rm -rf bin

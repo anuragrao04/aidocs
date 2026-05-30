@@ -1,17 +1,15 @@
+//go:build testfixtures
+
 package repo
 
 import "github.com/anuragrao/aidocs/api/internal/auth"
 
-// NewMemorySeeded returns an in-memory repository preloaded with the canonical
-// fixture graph used by the API/server tests: an owner-owned document (doc_1 /
-// ver_1), a service account (sa_1), an existing comment (cmt_1), and the role
-// conventions for the editor_1/commenter_1/viewer_1 principals.
+// NewMemorySeeded returns an in-memory repository preloaded with a fixture
+// graph: an owner-owned document (doc_1 / ver_1), a service account (sa_1), a
+// comment (cmt_1), and roles for the editor_1/commenter_1/viewer_1 principals.
 //
-// The roles are seeded into fixtureRoles/fixturePrincipals rather than as real
-// grants on purpose: grants would consume the grantN sequence and shift the IDs
-// that tests assert on (e.g. the first grant a test creates must be gr_1).
-//
-// Production code uses NewMemory (empty); only tests should call this.
+// Roles are seeded into fixtureRoles/fixturePrincipals rather than as real
+// grants so the grantN sequence stays at gr_1 for the first created grant.
 func NewMemorySeeded() *Memory {
 	m := NewMemory()
 	owner := auth.Principal{Type: auth.PrincipalUser, ID: "owner_1", Email: "owner@example.com", Name: "Owner"}

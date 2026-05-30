@@ -76,7 +76,7 @@ func main() {
 	}
 
 	srv := server.New(server.Config{
-		Environment:         "production",
+		Environment:         server.EnvProduction,
 		AppOrigin:           appOrigin,
 		RenderOrigin:        renderOrigin,
 		GoogleOAuth:         auth.NewGoogleOAuth(clientID, clientSecret, appOrigin+"/v1/auth/google/callback"),
