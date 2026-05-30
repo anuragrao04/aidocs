@@ -14,7 +14,7 @@ import (
 func docsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "docs", Short: "Manage documents"}
 	var title, vis string
-	create := &cobra.Command{Use: "create <file>", Short: "Create a document from an HTML file", Example: "  aidocs docs create report.html --title 'Report' --visibility private", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	create := &cobra.Command{Use: "create <file>", Short: "Create a document from an HTML file", Long: "Create a document from a single self-contained HTML file.\n\nRun 'aidocs guidelines' for authoring rules (single-file, base64 images, reader theme).", Example: "  aidocs docs create report.html --title 'Report' --visibility private", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		data, fn, err := readFileArg(args[0])
 		if err != nil {
 			return err

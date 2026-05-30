@@ -71,7 +71,7 @@ func NewRoot(out io.Writer) *cobra.Command {
 	root.PersistentFlags().BoolVar(&g.json, "json", false, "JSON output")
 	root.PersistentFlags().BoolVarP(&g.quiet, "quiet", "q", false, "quiet")
 	root.PersistentFlags().BoolVarP(&g.verbose, "verbose", "v", false, "verbose")
-	root.AddCommand(authCmd(g, out), contextCmd(g, out), docsCmd(g, out), versionsCmd(g, out), saRoot(g, out), openCmd(g, out))
+	root.AddCommand(authCmd(g, out), contextCmd(g, out), docsCmd(g, out), versionsCmd(g, out), saRoot(g, out), openCmd(g, out), guidelinesCmd(g, out))
 	return root
 }
 
