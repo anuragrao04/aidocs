@@ -57,11 +57,11 @@ func main() {
 	}
 	defer store.Close()
 
-	appOrigin := os.Getenv("APP_ORIGIN")
+	appOrigin := os.Getenv("AIDOCS_APP_ORIGIN")
 	if appOrigin == "" {
-		log.Fatal("APP_ORIGIN is required")
+		log.Fatal("AIDOCS_APP_ORIGIN is required")
 	}
-	if err := validateOrigin("APP_ORIGIN", appOrigin); err != nil {
+	if err := validateOrigin("AIDOCS_APP_ORIGIN", appOrigin); err != nil {
 		log.Fatal(err)
 	}
 	clientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
@@ -74,11 +74,11 @@ func main() {
 		log.Fatal("SESSION_SECRET must be at least 32 bytes")
 	}
 
-	renderOrigin := os.Getenv("RENDER_ORIGIN")
+	renderOrigin := os.Getenv("AIDOCS_RENDER_ORIGIN")
 	if renderOrigin == "" {
-		log.Fatal("RENDER_ORIGIN is required")
+		log.Fatal("AIDOCS_RENDER_ORIGIN is required")
 	}
-	if err := validateOrigin("RENDER_ORIGIN", renderOrigin); err != nil {
+	if err := validateOrigin("AIDOCS_RENDER_ORIGIN", renderOrigin); err != nil {
 		log.Fatal(err)
 	}
 

@@ -22,8 +22,8 @@ the binary understands.
 For production, use **separate app and render origins** when possible:
 
 ```text
-APP_ORIGIN=https://aidocs.example.com
-RENDER_ORIGIN=https://render.aidocs.example.com
+AIDOCS_APP_ORIGIN=https://aidocs.example.com
+AIDOCS_RENDER_ORIGIN=https://render.aidocs.example.com
 ```
 
 The render origin serves uploaded HTML inside a sandboxed iframe. Putting
@@ -102,7 +102,7 @@ Open <http://localhost:8080>. See `.env.example` for every variable; the
 reference tables below document them too.
 
 For production, sit aidocs behind a TLS-terminating reverse proxy (nginx,
-Caddy, Cloudflare, ALB, etc.) and set `APP_ORIGIN` / `RENDER_ORIGIN` to
+Caddy, Cloudflare, ALB, etc.) and set `AIDOCS_APP_ORIGIN` / `AIDOCS_RENDER_ORIGIN` to
 the public HTTPS URLs.
 
 ## Kubernetes with Helm
@@ -243,8 +243,8 @@ BLOB_BUCKET=aidocs-prod
 BLOB_REGION=us-east-1
 BLOB_ACCESS_KEY_ID=AKIA...
 BLOB_SECRET_ACCESS_KEY=...
-APP_ORIGIN=https://aidocs.example.com
-RENDER_ORIGIN=https://render.aidocs.example.com
+AIDOCS_APP_ORIGIN=https://aidocs.example.com
+AIDOCS_RENDER_ORIGIN=https://render.aidocs.example.com
 GOOGLE_OAUTH_CLIENT_ID=...
 GOOGLE_OAUTH_CLIENT_SECRET=...
 SESSION_SECRET=...
@@ -279,8 +279,8 @@ Terminate TLS at nginx, Caddy, or any reverse proxy of your choice.
 |----------|---------|
 | `DATABASE_URL` | Postgres connection string. Auto-runs migrations at startup unless disabled. |
 | `BLOB_BUCKET` | S3-compatible bucket name for stored HTML versions. |
-| `APP_ORIGIN` | Public URL where the web UI is served. Also injected into the served `index.html` so the frontend can render correct copy-paste commands (CLI, curl, agent prompts). |
-| `RENDER_ORIGIN` | Public URL where uploaded HTML is sandbox-rendered. May equal `APP_ORIGIN` for non-production. |
+| `AIDOCS_APP_ORIGIN` | Public URL where the web UI is served. Also injected into the served `index.html` so the frontend can render correct copy-paste commands (CLI, curl, agent prompts). |
+| `AIDOCS_RENDER_ORIGIN` | Public URL where uploaded HTML is sandbox-rendered. May equal `AIDOCS_APP_ORIGIN` for non-production. |
 | `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth web client ID. |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth web client secret. |
 | `SESSION_SECRET` | Session signing key. At least 32 random bytes. |
@@ -321,7 +321,7 @@ GET /onboarding/sample.html    Bundled sample report used by the in-app
 
 ## How the frontend gets its public URL
 
-When the server returns `index.html`, it substitutes the `APP_ORIGIN`
+When the server returns `index.html`, it substitutes the `AIDOCS_APP_ORIGIN`
 value into a placeholder so the React app can read it synchronously at
 boot. This drives copy-paste-correct commands in the UI:
 
@@ -355,11 +355,11 @@ down-migration manually if needed; the binary does not auto-rollback.
 
 ## Production checklist
 
-- [ ] `APP_ORIGIN` and `RENDER_ORIGIN` on different hostnames.
+- [ ] `AIDOCS_APP_ORIGIN` and `AIDOCS_RENDER_ORIGIN` on different hostnames.
 - [ ] HTTPS everywhere (TLS at the proxy/ingress).
 - [ ] `SESSION_SECRET` rotated to a fresh 32+ byte value, stored in a
       secret manager.
-- [ ] Google OAuth callback URLs match `APP_ORIGIN`.
+- [ ] Google OAuth callback URLs match `AIDOCS_APP_ORIGIN`.
 - [ ] `ALLOWED_OAUTH_DOMAINS` set if you don't want public sign-ups.
 - [ ] Postgres backups configured.
 - [ ] Blob storage versioning / lifecycle rules configured.

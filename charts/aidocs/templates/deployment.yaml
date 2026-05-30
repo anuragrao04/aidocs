@@ -41,9 +41,9 @@ spec:
           env:
             - name: AIDOCS_PORT
               value: {{ .Values.containerPort | quote }}
-            - name: APP_ORIGIN
+            - name: AIDOCS_APP_ORIGIN
               value: {{ required "origins.app is required" .Values.origins.app | quote }}
-            - name: RENDER_ORIGIN
+            - name: AIDOCS_RENDER_ORIGIN
               value: {{ required "origins.render is required" .Values.origins.render | quote }}
             - name: AIDOCS_MIGRATE
               value: {{ ternary "true" "false" .Values.database.migrate | quote }}
