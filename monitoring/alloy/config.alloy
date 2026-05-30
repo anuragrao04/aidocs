@@ -1,0 +1,30 @@
+// Grafana Alloy config: scrape the aidocs private metrics port and
+// remote_write to Grafana Cloud (hosted Prometheus).
+//
+// All values come from environment variables so nothing is baked into the
+// image. Set these on the Alloy service:
+//
+//   AIDOCS_METRICS_TARGET  host:port of the aidocs metrics listener, reached
+//                          over Railway's private network
+//                          (e.g. aidocs.railway.internal:9090)
+//   GC_PROM_URL            Grafana Cloud remote_write endpoint
+//                          (e.g. https://prometheus-prod-XX-region.grafana.net/api/prom/push)
+//   GC_PROM_USER           Grafana Cloud instance ID / username
+//   GC_PROM_PASSWORD       Grafana Cloud access policy token (metrics:write)
+
+prometheus.scrape "aidocs" {
+  targets         = [{ __address__ = sys.env("AIDOCS_METRICS_TARGET") }]
+  metrics_path    = "/metrics"
+  scrape_interval = "30s"
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GC_PROM_URL")
+    basic_auth {
+      username = sys.env("GC_PROM_USER")
+      password = sys.env("GC_PROM_PASSWORD")
+    }
+  }
+}
