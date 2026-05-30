@@ -23,7 +23,6 @@ func TestRenderWrapperPreservesInlineScriptClosingTag(t *testing.T) {
 func TestBridgeImplementsThemeContract(t *testing.T) {
 	for _, needle := range []string{
 		"data-aidocs-theme",
-		"data-aidocs-color-scheme",
 		"aidocs_theme",
 		"aidocs:theme",
 	} {

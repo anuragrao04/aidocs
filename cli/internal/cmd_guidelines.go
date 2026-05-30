@@ -12,18 +12,19 @@ import (
 // it straight from `aidocs guidelines` before writing a document.
 const guidelinesText = `aidocs document authoring guidelines
 
-A document is ONE self-contained HTML file.
-  - Inline all CSS in a <style> tag; inline all JS in <script> tags.
-  - No external stylesheets, scripts, or fonts that require the network.
-  - Embed images as base64 data URLs (data:image/png;base64,...). There is
-    no separate image hosting.
+A document is ONE HTML file.
+  - Anything that fits in a single .html file is fine, including external
+    stylesheets, fonts, scripts, and other CDN assets.
+  - aidocs does NOT host assets for you. There is no image/file hosting,
+    so embed your own images as base64 data URLs (data:image/png;base64,...)
+    or reference them from a URL you already control.
 
 Theme: follow the reader's aidocs theme.
   The viewer chooses light or dark in the aidocs UI. The render bridge sets
-  these attributes on <html> inside your document and keeps them in sync:
+  this attribute on <html> inside your document and keeps it in sync:
 
-    <html data-aidocs-theme="light" data-aidocs-color-scheme="light">
-    <html data-aidocs-theme="dark"  data-aidocs-color-scheme="dark">
+    <html data-aidocs-theme="light">
+    <html data-aidocs-theme="dark">
 
   Opt in by defining your palette against the attribute and driving the page
   from variables:
