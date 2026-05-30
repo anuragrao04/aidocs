@@ -22,8 +22,15 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 		if title == "" {
 			title = fn
 		}
-		return run(g, out, func(c *Client) ([]byte, error) {
+		cl, err := client(g)
+		if err != nil {
+			return err
+		}
+		return action(g, out, func(c *Client) ([]byte, error) {
 			return c.multipart("/v1/documents", map[string]string{"title": title, "visibility": first(vis, "private")}, "file", fn, data)
+		}, func(m map[string]any) string {
+			id := fmt.Sprint(value(m, "id"))
+			return fmt.Sprintf("Created document %q (%s). Review it at %s", title, id, browserURL(cl.Base, "/documents/%s", id))
 		})
 	}}
 	create.Flags().StringVar(&title, "title", "", "document title (defaults to the file name)")
@@ -40,13 +47,14 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 		if len(body) == 0 {
 			return errors.New("nothing to update; pass --title and/or --visibility")
 		}
-		return run(g, out, func(c *Client) ([]byte, error) {
+		return action(g, out, func(c *Client) ([]byte, error) {
 			return c.doJSON("PATCH", apiPath("/v1/documents/%s", args[0]), body)
-		})
+		}, func(map[string]any) string { return "Updated document " + args[0] + "." })
 	}}
 	update.Flags().StringVar(&ut, "title", "", "new document title")
 	update.Flags().StringVar(&uv, "visibility", "", "new visibility: private or public")
-	c.AddCommand(simple(g, out, "list", "GET", "/v1/documents", 0), create, simplePath(g, out, "show", "GET", "/v1/documents/%s"), update, simplePath(g, out, "delete", "DELETE", "/v1/documents/%s"), pullCmd(g, out), docsPushCmd(g, out), versionsCmd(g, out), commentsCmd(g, out), grantsCmd(g, out))
+	del := mutate(g, out, "delete <doc_id>", "Delete a document", "DELETE", "/v1/documents/%s", 1, func(a []string) string { return "Deleted document " + a[0] + "." })
+	c.AddCommand(simple(g, out, "list", "GET", "/v1/documents", 0), create, simplePath(g, out, "show", "GET", "/v1/documents/%s"), update, del, pullCmd(g, out), docsPushCmd(g, out), versionsCmd(g, out), commentsCmd(g, out), grantsCmd(g, out))
 	return c
 }
 
@@ -71,8 +79,11 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 			default:
 				return errors.New("pass --to <email-or-bot-address>")
 			}
-			return run(g, out, func(c *Client) ([]byte, error) {
+			target := first(address, principal)
+			return action(g, out, func(c *Client) ([]byte, error) {
 				return c.doJSON("POST", apiPath("/v1/documents/%s/grants", args[0]), body)
+			}, func(m map[string]any) string {
+				return fmt.Sprintf("Shared %s with %s as %s.", args[0], target, role)
 			})
 		},
 	}
@@ -81,16 +92,12 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 	add.Flags().StringVar(&role, "role", "viewer", "viewer, commenter, editor, or owner")
 	var r string
 	upd := &cobra.Command{Use: "update <doc_id> <grant_id>", Short: "Update a grant role", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		return run(g, out, func(c *Client) ([]byte, error) {
+		return action(g, out, func(c *Client) ([]byte, error) {
 			return c.doJSON("PATCH", apiPath("/v1/documents/%s/grants/%s", args[0], args[1]), map[string]any{"role": r})
-		})
+		}, func(map[string]any) string { return "Changed grant " + args[1] + " on " + args[0] + " to " + r + "." })
 	}}
 	upd.Flags().StringVar(&r, "role", "viewer", "new grant role: viewer, commenter, editor, or owner")
-	revoke := &cobra.Command{Use: "revoke <doc_id> <grant_id>", Short: "Revoke a document grant", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.do("DELETE", apiPath("/v1/documents/%s/grants/%s", args[0], args[1]), nil, "")
-		})
-	}}
+	revoke := mutate(g, out, "revoke <doc_id> <grant_id>", "Revoke a document grant", "DELETE", "/v1/documents/%s/grants/%s", 2, func(a []string) string { return "Revoked grant " + a[1] + " on " + a[0] + "." })
 	c.AddCommand(simplePath(g, out, "list", "GET", "/v1/documents/%s/grants"), add, upd, revoke)
 	return c
 }
@@ -153,7 +160,11 @@ func pullCmd(g *globals, out io.Writer) *cobra.Command {
 			return err
 		}
 		if outp != "" {
-			return os.WriteFile(outp, b, pulledFilePerm)
+			if err := os.WriteFile(outp, b, pulledFilePerm); err != nil {
+				return err
+			}
+			confirm(out, g, "Pulled version "+v+" of "+args[0]+" to "+outp+".")
+			return nil
 		}
 		_, err = out.Write(b)
 		return err
@@ -221,8 +232,10 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 		if createBody == "" || createVersion == "" || createQuote == "" {
 			return errors.New("--body, --version, and --quote are required")
 		}
-		return run(g, out, func(c *Client) ([]byte, error) {
+		return action(g, out, func(c *Client) ([]byte, error) {
 			return c.doJSON("POST", apiPath("/v1/documents/%s/comments", args[0]), map[string]any{"body": createBody, "version_id": createVersion, "anchor": map[string]any{"quote": createQuote, "prefix": createPrefix, "suffix": createSuffix}})
+		}, func(m map[string]any) string {
+			return "Added comment " + fmt.Sprint(value(m, "id")) + " on " + args[0] + "."
 		})
 	}}
 	create.Flags().StringVar(&createBody, "body", "", "comment body text")
@@ -236,9 +249,9 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 		if updateBody == "" && updateStatus == "" {
 			return errors.New("nothing to update; pass --body and/or --status")
 		}
-		return run(g, out, func(c *Client) ([]byte, error) {
+		return action(g, out, func(c *Client) ([]byte, error) {
 			return c.doJSON("PATCH", apiPath("/v1/documents/%s/comments/%s", args[0], args[1]), map[string]any{"body": updateBody, "status": updateStatus})
-		})
+		}, func(map[string]any) string { return "Updated comment " + args[1] + "." })
 	}}
 	update.Flags().StringVar(&updateBody, "body", "", "new comment body text")
 	update.Flags().StringVar(&updateStatus, "status", "", "new status: open or resolved")
@@ -248,17 +261,15 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 }
 
 func deleteCommentCmd(g *globals, out io.Writer) *cobra.Command {
-	return &cobra.Command{Use: "delete <doc_id> <comment_id>", Short: "Delete a document comment", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.do("DELETE", apiPath("/v1/documents/%s/comments/%s", args[0], args[1]), nil, "")
-		})
-	}}
+	return mutate(g, out, "delete <doc_id> <comment_id>", "Delete a document comment", "DELETE", "/v1/documents/%s/comments/%s", 2, func(a []string) string { return "Deleted comment " + a[1] + "." })
 }
 
 func resolveCmd(g *globals, out io.Writer, name, status string) *cobra.Command {
 	short := "Resolve document comments"
+	verb := "Resolved"
 	if status == "open" {
 		short = "Reopen document comments"
+		verb = "Reopened"
 	}
 	return &cobra.Command{Use: name + " <doc_id> <comment_id>...", Short: short, Args: minArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		cl, err := client(g)
@@ -271,9 +282,13 @@ func resolveCmd(g *globals, out io.Writer, name, status string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := render(out, g, b); err != nil {
-				return err
+			if g.json {
+				if err := render(out, g, b); err != nil {
+					return err
+				}
+				continue
 			}
+			confirm(out, g, verb+" comment "+id+".")
 		}
 		return nil
 	}}
@@ -286,7 +301,14 @@ func openCmd(g *globals, out io.Writer) *cobra.Command {
 			return err
 		}
 		u := browserURL(c.Base, "/documents/%s", args[0])
-		message(out, g, u)
-		return openBrowserErr(u)
+		if err := openBrowserErr(u); err != nil {
+			return err
+		}
+		if os.Getenv("AIDOCS_NO_BROWSER") != "" {
+			message(out, g, "Browser launch is disabled (AIDOCS_NO_BROWSER). Open this URL manually:\n"+u)
+			return nil
+		}
+		confirm(out, g, "Opened "+args[0]+" in your browser: "+u)
+		return nil
 	}}
 }

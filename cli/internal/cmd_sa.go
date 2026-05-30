@@ -89,25 +89,51 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 		if len(body) == 0 {
 			return errors.New("nothing to update; pass --name, --enable, or --disable")
 		}
-		return run(g, out, func(c *Client) ([]byte, error) {
+		verb := "Updated"
+		if enable {
+			verb = "Enabled"
+		} else if disable {
+			verb = "Disabled"
+		}
+		return action(g, out, func(c *Client) ([]byte, error) {
 			return c.doJSON("PATCH", apiPath("/v1/service-accounts/%s", args[0]), body)
-		})
+		}, func(map[string]any) string { return verb + " service account " + args[0] + "." })
 	}}
 	upd.Flags().StringVar(&newName, "name", "", "new service account name")
 	upd.Flags().BoolVar(&enable, "enable", false, "enable (un-disable) the service account")
 	upd.Flags().BoolVar(&disable, "disable", false, "disable the service account")
 	key := &cobra.Command{Use: "key", Short: "Manage service account keys"}
 	keyCreate := &cobra.Command{Use: "create <sa_id>", Short: "Create a service account key", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.doJSON("POST", apiPath("/v1/service-accounts/%s/keys", args[0]), map[string]any{"name": first(name, "default")})
-		})
+		cl, err := client(g)
+		if err != nil {
+			return err
+		}
+		b, err := cl.doJSON("POST", apiPath("/v1/service-accounts/%s/keys", args[0]), map[string]any{"name": first(name, "default")})
+		if err != nil {
+			return err
+		}
+		if g.json {
+			return render(out, g, b)
+		}
+		if g.quiet {
+			return nil
+		}
+		var resp struct {
+			ID    string `json:"id"`
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(b, &resp); err != nil || resp.Token == "" {
+			return render(out, g, b)
+		}
+		confirm(out, g, "Created key "+resp.ID+" for "+args[0]+".")
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  \u26a0  Copy this key now \u2014 you won't see it again.")
+		fmt.Fprintln(out)
+		fmt.Fprintf(out, "    %s\n", resp.Token)
+		return nil
 	}}
 	keyCreate.Flags().StringVar(&name, "name", "default", "key name")
-	keyRevoke := &cobra.Command{Use: "revoke <sa_id> <key_id>", Short: "Revoke a service account key", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.do("DELETE", apiPath("/v1/service-accounts/%s/keys/%s", args[0], args[1]), nil, "")
-		})
-	}}
+	keyRevoke := mutate(g, out, "revoke <sa_id> <key_id>", "Revoke a service account key", "DELETE", "/v1/service-accounts/%s/keys/%s", 2, func(a []string) string { return "Revoked key " + a[1] + " for " + a[0] + "." })
 	key.AddCommand(simplePath(g, out, "list", "GET", "/v1/service-accounts/%s/keys"), keyCreate, keyRevoke)
 	c.AddCommand(simple(g, out, "list", "GET", "/v1/service-accounts", 0), create, upd, key, transferCmd(g, out), transfersCmd(g, out))
 	return c
@@ -116,12 +142,18 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 func transferCmd(g *globals, out io.Writer) *cobra.Command {
 	var to string
 	c := &cobra.Command{Use: "transfer <sa_id>", Short: "Transfer service account ownership", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		return run(g, out, func(c *Client) ([]byte, error) {
+		if to == "" {
+			return errors.New("pass --to <email>")
+		}
+		return action(g, out, func(c *Client) ([]byte, error) {
 			return c.doJSON("POST", apiPath("/v1/service-accounts/%s/transfer", args[0]), map[string]any{"to_user_email": to})
-		})
+		}, func(map[string]any) string { return "Requested transfer of " + args[0] + " to " + to + ". They must accept it." })
 	}}
 	c.Flags().StringVar(&to, "to", "", "email of the user to transfer ownership to")
-	c.AddCommand(simplePath(g, out, "accept", "POST", "/v1/service-accounts/transfers/%s/accept"), simplePath(g, out, "decline", "POST", "/v1/service-accounts/transfers/%s/decline"))
+	c.AddCommand(
+		mutate(g, out, "accept <transfer_id>", "Accept an incoming transfer", "POST", "/v1/service-accounts/transfers/%s/accept", 1, func(a []string) string { return "Accepted transfer " + a[0] + "." }),
+		mutate(g, out, "decline <transfer_id>", "Decline an incoming transfer", "POST", "/v1/service-accounts/transfers/%s/decline", 1, func(a []string) string { return "Declined transfer " + a[0] + "." }),
+	)
 	return c
 }
 

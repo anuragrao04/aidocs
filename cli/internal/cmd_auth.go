@@ -116,7 +116,7 @@ func loginCmd(g *globals, out io.Writer) *cobra.Command {
 		if err := saveConfig(cfg); err != nil {
 			return err
 		}
-		message(out, g, "Logged in")
+		confirm(out, g, "Logged in to "+srv+".")
 		return nil
 	}}
 	cmd.Flags().StringVar(&name, "name", "", "credential name")
@@ -159,7 +159,7 @@ func logoutCmd(g *globals, out io.Writer) *cobra.Command {
 		if err := saveConfig(cfg); err != nil {
 			return err
 		}
-		message(out, g, "Logged out")
+		confirm(out, g, "Logged out of "+name+".")
 		return nil
 	}}
 	cmd.Flags().BoolVar(&localOnly, "local", false, "only remove the local credential; do not revoke on the server")

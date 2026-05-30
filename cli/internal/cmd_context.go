@@ -32,7 +32,7 @@ func contextCmd(g *globals, out io.Writer) *cobra.Command {
 		if err := saveConfig(cfg); err != nil {
 			return err
 		}
-		message(out, g, "Switched to "+name)
+		confirm(out, g, "Switched to context "+name+".")
 		return nil
 	}})
 	return c

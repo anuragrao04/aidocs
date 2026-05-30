@@ -152,6 +152,18 @@ func simplePath(g *globals, out io.Writer, use, method, tmpl string) *cobra.Comm
 	}}
 }
 
+// mutate builds a bodyless mutating command (DELETE/POST) that reports the
+// action conversationally instead of echoing the API payload. The path
+// template's %s segments are filled from the positional args, and msg builds
+// the confirmation line from those same args.
+func mutate(g *globals, out io.Writer, use, short, method, tmpl string, n int, msg func(args []string) string) *cobra.Command {
+	return &cobra.Command{Use: use, Short: short, Args: exactArgs(n), RunE: func(cmd *cobra.Command, args []string) error {
+		return action(g, out, func(c *Client) ([]byte, error) {
+			return c.do(method, apiPath(tmpl, args...), nil, "")
+		}, func(map[string]any) string { return msg(args) })
+	}}
+}
+
 func shortFor(use string) string {
 	switch use {
 	case "list":

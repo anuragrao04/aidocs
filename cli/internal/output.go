@@ -51,6 +51,40 @@ func message(out io.Writer, g *globals, text string) {
 	fmt.Fprintln(out, text)
 }
 
+// confirm writes a conversational, action-indicative status line (prefixed with
+// a check mark) so the caller can see what just happened rather than an
+// API-shaped payload. Honors --quiet.
+func confirm(out io.Writer, g *globals, text string) {
+	if g.quiet {
+		return
+	}
+	fmt.Fprintln(out, "\u2713 "+text)
+}
+
+// action performs a mutating call and reports it conversationally. With --json
+// it prints the raw payload (machine-readable); with --quiet it prints nothing;
+// otherwise it prints the confirmation built from the decoded response.
+func action(g *globals, out io.Writer, fn func(*Client) ([]byte, error), msg func(m map[string]any) string) error {
+	c, err := client(g)
+	if err != nil {
+		return err
+	}
+	b, err := fn(c)
+	if err != nil {
+		return err
+	}
+	if g.quiet {
+		return nil
+	}
+	if g.json {
+		return render(out, g, b)
+	}
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	confirm(out, g, msg(m))
+	return nil
+}
+
 func printPushedVersion(out io.Writer, g *globals, docID, server string, b []byte) error {
 	if g.quiet {
 		return nil
@@ -62,9 +96,10 @@ func printPushedVersion(out io.Writer, g *globals, docID, server string, b []byt
 	if json.Unmarshal(b, &m) != nil {
 		return render(out, g, b)
 	}
-	m["document_id"] = docID
-	m["url"] = browserURL(server, "/documents/%s", docID)
-	fmt.Fprintln(out, compactRow(m))
+	num := fmt.Sprint(value(m, "number"))
+	id := fmt.Sprint(value(m, "id"))
+	url := browserURL(server, "/documents/%s", docID)
+	confirm(out, g, fmt.Sprintf("Pushed version %s (%s) to %s. Review it at %s", num, id, docID, url))
 	return nil
 }
 
