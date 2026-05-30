@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -24,7 +25,6 @@ type Config struct {
 type Context struct {
 	Server     string            `json:"server"`
 	Credential map[string]any    `json:"credential,omitempty"`
-	DefaultDoc *string           `json:"default_doc"`
 	Pulled     map[string]string `json:"pulled"`
 }
 
@@ -41,13 +41,29 @@ func loadConfig() (Config, error) {
 	c := Config{Contexts: map[string]*Context{}}
 	b, err := os.ReadFile(configPath())
 	if err != nil {
+		// A missing config is the normal first-run state, not an error.
 		return c, nil
 	}
-	err = json.Unmarshal(b, &c)
+	if err := json.Unmarshal(b, &c); err != nil {
+		// A present-but-corrupt config must be a hard error so mutating
+		// callers abort instead of overwriting it with an empty config.
+		return Config{Contexts: map[string]*Context{}}, fmt.Errorf("config %s is corrupt: %w", configPath(), err)
+	}
 	if c.Contexts == nil {
 		c.Contexts = map[string]*Context{}
 	}
-	return c, err
+	return c, nil
+}
+
+// currentContextE is like currentContext but surfaces a corrupt-config error so
+// mutating callers do not clobber an unreadable config on save.
+func currentContextE(g *globals) (string, *Context, Config, error) {
+	cfg, err := loadConfig()
+	if err != nil {
+		return "", nil, Config{}, err
+	}
+	name, cx, cfg := currentContextFrom(g, cfg)
+	return name, cx, cfg, nil
 }
 
 func saveConfig(c Config) error {
@@ -62,6 +78,14 @@ func saveConfig(c Config) error {
 	return os.WriteFile(p, b, configFilePerm)
 }
 
+// serverOr returns the context's server, or fallback when the context is nil.
+func (c *Context) serverOr(fallback string) string {
+	if c == nil {
+		return fallback
+	}
+	return c.Server
+}
+
 func ctxName(s string) string {
 	u, err := url.Parse(normalizeServer(s))
 	if err == nil && u.Host != "" {
@@ -72,6 +96,10 @@ func ctxName(s string) string {
 
 func currentContext(g *globals) (string, *Context, Config) {
 	cfg, _ := loadConfig()
+	return currentContextFrom(g, cfg)
+}
+
+func currentContextFrom(g *globals, cfg Config) (string, *Context, Config) {
 	srv := first(g.server, os.Getenv("AIDOCS_SERVER"), cfg.ActiveContext, defaultServer)
 	name := ctxName(srv)
 	cx := cfg.Contexts[name]

@@ -26,13 +26,19 @@ type Client struct {
 func client(g *globals) (*Client, error) {
 	srv := first(g.server, os.Getenv("AIDOCS_SERVER"))
 	tok := first(g.token, os.Getenv("AIDOCS_TOKEN"))
-	cfg, _ := loadConfig()
+	cfg, err := loadConfig()
+	if err != nil {
+		return nil, err
+	}
 	if srv == "" && cfg.ActiveContext != "" {
-		if c := cfg.Contexts[cfg.ActiveContext]; c != nil {
-			srv = c.Server
-			if tok == "" {
-				tok = credentialToken(ctxName(srv), c.Credential)
-			}
+		srv = cfg.Contexts[cfg.ActiveContext].serverOr(srv)
+	}
+	// Look up a stored token for whichever server we're targeting, whether it
+	// came from a flag/env or the active context, so an explicit --server that
+	// the user is logged into still authenticates.
+	if tok == "" && srv != "" {
+		if c := cfg.Contexts[ctxName(srv)]; c != nil {
+			tok = credentialToken(ctxName(srv), c.Credential)
 		}
 	}
 	if srv == "" {
@@ -76,7 +82,7 @@ func (c *Client) do(method, path string, body io.Reader, ct string) ([]byte, err
 	}
 	defer res.Body.Close()
 	b, _ := io.ReadAll(res.Body)
-	if res.StatusCode >= 300 {
+	if res.StatusCode >= 400 {
 		ae := &APIError{Status: res.StatusCode, Message: strings.TrimSpace(string(b)), Body: string(b)}
 		var payload struct {
 			Error struct {
@@ -93,7 +99,7 @@ func (c *Client) do(method, path string, body io.Reader, ct string) ([]byte, err
 	return b, nil
 }
 
-func (c *Client) json(method, path string, in any) ([]byte, error) {
+func (c *Client) doJSON(method, path string, in any) ([]byte, error) {
 	var r io.Reader
 	if in != nil {
 		b, err := json.Marshal(in)
