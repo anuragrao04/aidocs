@@ -419,7 +419,7 @@ func TestRenderCSPAllowsConfiguredAppOrigin(t *testing.T) {
 		"X-Test-Principal": "user:owner_1:owner@example.com:Owner",
 	})
 
-	tokRR := do(t, h, http.MethodPost, "/v1/versions/ver_1/render-token", "", map[string]string{
+	tokRR := do(t, h, http.MethodPost, "/v1/documents/doc_1/versions/ver_1/render-token", "", map[string]string{
 		"X-Test-Principal": "user:owner_1:owner@example.com:Owner",
 	})
 	assertStatus(t, tokRR, http.StatusOK)
@@ -570,7 +570,7 @@ func TestRenderRouteReturnsWrapperNotRawHTML(t *testing.T) {
 		"Content-Type":     contentType,
 		"X-Test-Principal": "user:owner_1:owner@example.com:Owner",
 	})
-	tokRR := do(t, h, http.MethodPost, "/v1/versions/ver_1/render-token", "", map[string]string{
+	tokRR := do(t, h, http.MethodPost, "/v1/documents/doc_1/versions/ver_1/render-token", "", map[string]string{
 		"X-Test-Principal": "user:owner_1:owner@example.com:Owner",
 	})
 	var tok struct {

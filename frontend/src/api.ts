@@ -128,9 +128,9 @@ export const api = {
       body: fd,
     });
   },
-  renderToken: (version: string) =>
+  renderToken: (doc: string, version: string) =>
     request<{ token: string; url: string }>(
-      `/v1/versions/${version}/render-token`,
+      `/v1/documents/${doc}/versions/${version}/render-token`,
       { method: "POST" },
     ),
   listComments: (doc: string, version?: string) =>

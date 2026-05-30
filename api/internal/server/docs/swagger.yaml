@@ -590,6 +590,81 @@ paths:
       summary: Create version
       tags:
       - versions
+  /v1/documents/{id}/versions/{version_id}:
+    get:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Version ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/repo.Version'
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Get version metadata
+      tags:
+      - versions
+  /v1/documents/{id}/versions/{version_id}/html:
+    get:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Version ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Get version HTML
+      tags:
+      - versions
+  /v1/documents/{id}/versions/{version_id}/render-token:
+    post:
+      parameters:
+      - description: Document ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Version ID
+        in: path
+        name: version_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - bearerAuth: []
+      - cookieAuth: []
+      summary: Create render token
+      tags:
+      - versions
   /v1/me:
     get:
       produces:
@@ -791,66 +866,6 @@ paths:
       summary: Decline ownership transfer
       tags:
       - service-accounts
-  /v1/versions/{id}:
-    get:
-      parameters:
-      - description: Version ID
-        in: path
-        name: id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/repo.Version'
-      security:
-      - bearerAuth: []
-      - cookieAuth: []
-      summary: Get version metadata
-      tags:
-      - versions
-  /v1/versions/{id}/html:
-    get:
-      parameters:
-      - description: Version ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - text/html
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
-      security:
-      - bearerAuth: []
-      - cookieAuth: []
-      summary: Get version HTML
-      tags:
-      - versions
-  /v1/versions/{id}/render-token:
-    post:
-      parameters:
-      - description: Version ID
-        in: path
-        name: id
-        required: true
-        type: string
-      responses:
-        "200":
-          description: OK
-          schema:
-            additionalProperties: true
-            type: object
-      security:
-      - bearerAuth: []
-      - cookieAuth: []
-      summary: Create render token
-      tags:
-      - versions
 securityDefinitions:
   bearerAuth:
     in: header

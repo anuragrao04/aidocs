@@ -809,6 +809,130 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/documents/{id}/versions/{version_id}": {
+            "get": {
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "Get version metadata",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Version ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/repo.Version"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/documents/{id}/versions/{version_id}/html": {
+            "get": {
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "Get version HTML",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Version ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/documents/{id}/versions/{version_id}/render-token": {
+            "post": {
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "tags": [
+                    "versions"
+                ],
+                "summary": "Create render token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Version ID",
+                        "name": "version_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/v1/me": {
             "get": {
                 "security": [
@@ -1150,109 +1274,6 @@ const docTemplate = `{
                         "description": "Created",
                         "schema": {
                             "$ref": "#/definitions/repo.OwnershipTransfer"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/versions/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "bearerAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "tags": [
-                    "versions"
-                ],
-                "summary": "Get version metadata",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Version ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/repo.Version"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/versions/{id}/html": {
-            "get": {
-                "security": [
-                    {
-                        "bearerAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "produces": [
-                    "text/html"
-                ],
-                "tags": [
-                    "versions"
-                ],
-                "summary": "Get version HTML",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Version ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/versions/{id}/render-token": {
-            "post": {
-                "security": [
-                    {
-                        "bearerAuth": []
-                    },
-                    {
-                        "cookieAuth": []
-                    }
-                ],
-                "tags": [
-                    "versions"
-                ],
-                "summary": "Create render token",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Version ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": true
                         }
                     }
                 }

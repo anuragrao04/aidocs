@@ -38,8 +38,8 @@ func TestCLICommandsE2E(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(map[string]any{"items": []any{map[string]any{"id": "ver_1", "number": 1}}})
 	})
-	mux.HandleFunc("/v1/versions/ver_1", jsonH(map[string]any{"id": "ver_1", "number": 1}))
-	mux.HandleFunc("/v1/versions/ver_1/html", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/v1/documents/doc_1/versions/ver_1", jsonH(map[string]any{"id": "ver_1", "number": 1}))
+	mux.HandleFunc("/v1/documents/doc_1/versions/ver_1/html", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		io.WriteString(w, "<h1>ok</h1>")
 	})
@@ -112,7 +112,7 @@ func TestCLICommandsE2E(t *testing.T) {
 	html := filepath.Join(t.TempDir(), "x.html")
 	os.WriteFile(html, []byte("<h1>x</h1>"), 0644)
 	out := filepath.Join(t.TempDir(), "out.html")
-	cmds := [][]string{{"auth", "whoami"}, {"docs", "list"}, {"docs", "create", html}, {"docs", "show", "doc_1"}, {"docs", "update", "doc_1", "--title", "New"}, {"versions", "list", "doc_1"}, {"versions", "show", "ver_1"}, {"versions", "html", "ver_1"}, {"docs", "pull", "doc_1", "--out", out}, {"docs", "push", "doc_1", html}, {"docs", "comments", "list", "doc_1"}, {"docs", "comments", "create", "doc_1", "--body", "hi", "--quote", "x", "--version", "ver_1"}, {"docs", "comments", "update", "doc_1", "cmt_1", "--status", "resolved"}, {"docs", "comments", "delete", "doc_1", "cmt_1"}, {"docs", "comments", "resolve", "doc_1", "cmt_1"}, {"docs", "comments", "reopen", "doc_1", "cmt_1"}, {"docs", "grants", "list", "doc_1"}, {"docs", "grants", "add", "doc_1", "--principal", "user:a@b.com", "--role", "viewer"}, {"docs", "grants", "update", "doc_1", "gr_1", "--role", "editor"}, {"docs", "grants", "revoke", "doc_1", "gr_1"}, {"sa", "list"}, {"sa", "create", "bot"}, {"sa", "update", "sa_1", "--disable"}, {"sa", "key", "list", "sa_1"}, {"sa", "key", "create", "sa_1"}, {"sa", "key", "revoke", "sa_1", "sak_1"}, {"sa", "transfer", "sa_1", "--to", "new@example.com"}, {"sa", "transfers", "list"}, {"sa", "transfer", "accept", "xfer_1"}, {"sa", "transfer", "decline", "xfer_1"}, {"context", "list"}, {"context", "use", srv.URL}, {"open", "doc_1"}}
+	cmds := [][]string{{"auth", "whoami"}, {"docs", "list"}, {"docs", "create", html}, {"docs", "show", "doc_1"}, {"docs", "update", "doc_1", "--title", "New"}, {"docs", "versions", "list", "doc_1"}, {"docs", "versions", "show", "doc_1", "ver_1"}, {"docs", "versions", "html", "doc_1", "ver_1"}, {"docs", "pull", "doc_1", "--out", out}, {"docs", "push", "doc_1", html}, {"docs", "comments", "list", "doc_1"}, {"docs", "comments", "create", "doc_1", "--body", "hi", "--quote", "x", "--version", "ver_1"}, {"docs", "comments", "update", "doc_1", "cmt_1", "--status", "resolved"}, {"docs", "comments", "delete", "doc_1", "cmt_1"}, {"docs", "comments", "resolve", "doc_1", "cmt_1"}, {"docs", "comments", "reopen", "doc_1", "cmt_1"}, {"docs", "grants", "list", "doc_1"}, {"docs", "grants", "add", "doc_1", "--principal", "user:a@b.com", "--role", "viewer"}, {"docs", "grants", "update", "doc_1", "gr_1", "--role", "editor"}, {"docs", "grants", "revoke", "doc_1", "gr_1"}, {"sa", "list"}, {"sa", "create", "bot"}, {"sa", "update", "sa_1", "--disable"}, {"sa", "key", "list", "sa_1"}, {"sa", "key", "create", "sa_1"}, {"sa", "key", "revoke", "sa_1", "sak_1"}, {"sa", "transfer", "sa_1", "--to", "new@example.com"}, {"sa", "transfers", "list"}, {"sa", "transfer", "accept", "xfer_1"}, {"sa", "transfer", "decline", "xfer_1"}, {"context", "list"}, {"context", "use", srv.URL}, {"open", "doc_1"}}
 	for _, c := range cmds {
 		t.Run(strings.Join(c, " "), func(t *testing.T) {
 			if _, err := Execute(c); err != nil {

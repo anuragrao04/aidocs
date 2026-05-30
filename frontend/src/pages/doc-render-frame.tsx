@@ -11,7 +11,7 @@ import { useDoc } from "./doc-context";
 // messages with the in-iframe bridge. Message origins are validated on both
 // ends, and painting is driven by the bridge's ready signal.
 export function RenderFrame() {
-  const { version, comments, activeComment, setSelection, setActiveComment } =
+  const { docId, version, comments, activeComment, setSelection, setActiveComment } =
     useDoc();
   const ref = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
@@ -19,7 +19,7 @@ export function RenderFrame() {
 
   const token = useQuery({
     queryKey: queryKeys.render(version),
-    queryFn: () => api.renderToken(version),
+    queryFn: () => api.renderToken(docId, version),
     staleTime: 4 * 60_000,
     enabled: !!version,
   });

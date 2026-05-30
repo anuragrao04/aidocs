@@ -64,9 +64,10 @@ func (h handlers) createVersion(c *gin.Context) {
 // @Tags versions
 // @Security bearerAuth
 // @Security cookieAuth
-// @Param id path string true "Version ID"
+// @Param id path string true "Document ID"
+// @Param version_id path string true "Version ID"
 // @Success 200 {object} map[string]interface{}
-// @Router /v1/versions/{id}/render-token [post]
+// @Router /v1/documents/{id}/versions/{version_id}/render-token [post]
 func (h handlers) createRenderToken(c *gin.Context) {
 	v, ok := h.loadVersionForViewer(c)
 	if !ok {
@@ -142,9 +143,10 @@ func (h handlers) listVersions(c *gin.Context) {
 // @Tags versions
 // @Security bearerAuth
 // @Security cookieAuth
-// @Param id path string true "Version ID"
+// @Param id path string true "Document ID"
+// @Param version_id path string true "Version ID"
 // @Success 200 {object} repo.Version
-// @Router /v1/versions/{id} [get]
+// @Router /v1/documents/{id}/versions/{version_id} [get]
 func (h handlers) getVersion(c *gin.Context) {
 	v, ok := h.loadVersionForViewer(c)
 	if !ok {
@@ -153,16 +155,18 @@ func (h handlers) getVersion(c *gin.Context) {
 	c.JSON(http.StatusOK, v)
 }
 
-// loadVersionForViewer fetches the version named by the :id param and verifies
-// the caller has at least viewer access to its document. It writes the
-// appropriate error response and returns ok=false when either check fails.
+// loadVersionForViewer fetches the version named by the :version_id param,
+// scoped to the document named by :id, and verifies the caller has at least
+// viewer access to that document. It writes the appropriate error response
+// and returns ok=false when any check fails.
 func (h handlers) loadVersionForViewer(c *gin.Context) (repo.Version, bool) {
-	v, err := h.deps.repository.GetVersion(c.Request.Context(), c.Param("id"))
-	if err != nil {
-		notFound(c)
+	docID := c.Param("id")
+	if !h.needDocRole(c, docID, repo.RoleViewer) {
 		return repo.Version{}, false
 	}
-	if !h.needDocRole(c, v.DocumentID, repo.RoleViewer) {
+	v, err := h.deps.repository.GetVersion(c.Request.Context(), c.Param("version_id"))
+	if err != nil || v.DocumentID != docID {
+		notFound(c)
 		return repo.Version{}, false
 	}
 	return v, true
@@ -173,15 +177,17 @@ func (h handlers) loadVersionForViewer(c *gin.Context) (repo.Version, bool) {
 // @Tags versions
 // @Security bearerAuth
 // @Security cookieAuth
-// @Param id path string true "Version ID"
+// @Param id path string true "Document ID"
+// @Param version_id path string true "Version ID"
 // @Produce html
 // @Success 200 {string} string
-// @Router /v1/versions/{id}/html [get]
+// @Router /v1/documents/{id}/versions/{version_id}/html [get]
 func (h handlers) getVersionHTML(c *gin.Context) {
-	if _, ok := h.loadVersionForViewer(c); !ok {
+	v, ok := h.loadVersionForViewer(c)
+	if !ok {
 		return
 	}
-	b, err := h.deps.repository.GetVersionHTML(c.Request.Context(), c.Param("id"))
+	b, err := h.deps.repository.GetVersionHTML(c.Request.Context(), v.ID)
 	if err != nil {
 		internalErr(c, err)
 		return

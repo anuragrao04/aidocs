@@ -46,7 +46,7 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 	}}
 	update.Flags().StringVar(&ut, "title", "", "new document title")
 	update.Flags().StringVar(&uv, "visibility", "", "new visibility: private or public")
-	c.AddCommand(simple(g, out, "list", "GET", "/v1/documents", 0), create, simplePath(g, out, "show", "GET", "/v1/documents/%s"), update, simplePath(g, out, "delete", "DELETE", "/v1/documents/%s"), pullCmd(g, out), docsPushCmd(g, out), commentsCmd(g, out), grantsCmd(g, out))
+	c.AddCommand(simple(g, out, "list", "GET", "/v1/documents", 0), create, simplePath(g, out, "show", "GET", "/v1/documents/%s"), update, simplePath(g, out, "delete", "DELETE", "/v1/documents/%s"), pullCmd(g, out), docsPushCmd(g, out), versionsCmd(g, out), commentsCmd(g, out), grantsCmd(g, out))
 	return c
 }
 
@@ -97,8 +97,24 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 
 func versionsCmd(g *globals, out io.Writer) *cobra.Command {
 	c := &cobra.Command{Use: "versions", Short: "Inspect document versions"}
-	c.AddCommand(simplePath(g, out, "list", "GET", "/v1/documents/%s/versions"), simplePath(g, out, "show", "GET", "/v1/versions/%s"), simplePath(g, out, "html", "GET", "/v1/versions/%s/html"))
+	list := simplePath(g, out, "list", "GET", "/v1/documents/%s/versions")
+	list.Use = "list <doc_id>"
+	c.AddCommand(
+		list,
+		docVersionCmd(g, out, "show", "GET", "/v1/documents/%s/versions/%s"),
+		docVersionCmd(g, out, "html", "GET", "/v1/documents/%s/versions/%s/html"),
+	)
 	return c
+}
+
+// docVersionCmd builds a versions subcommand scoped to a document, taking
+// <doc_id> <version_id> and filling a path template with two %s segments.
+func docVersionCmd(g *globals, out io.Writer, use, method, tmpl string) *cobra.Command {
+	return &cobra.Command{Use: use + " <doc_id> <version_id>", Short: shortFor(use), Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		return run(g, out, func(c *Client) ([]byte, error) {
+			return c.do(method, apiPath(tmpl, args[0], args[1]), nil, "")
+		})
+	}}
 }
 
 func pullCmd(g *globals, out io.Writer) *cobra.Command {
@@ -123,7 +139,7 @@ func pullCmd(g *globals, out io.Writer) *cobra.Command {
 				return errors.New("document response did not include current_version_id")
 			}
 		}
-		b, err := cl.do("GET", apiPath("/v1/versions/%s/html", v), nil, "")
+		b, err := cl.do("GET", apiPath("/v1/documents/%s/versions/%s/html", args[0], v), nil, "")
 		if err != nil {
 			return err
 		}
