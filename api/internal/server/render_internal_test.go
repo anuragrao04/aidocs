@@ -20,6 +20,19 @@ func TestRenderWrapperPreservesInlineScriptClosingTag(t *testing.T) {
 	}
 }
 
+func TestBridgeImplementsThemeContract(t *testing.T) {
+	for _, needle := range []string{
+		"data-aidocs-theme",
+		"data-aidocs-color-scheme",
+		"aidocs_theme",
+		"aidocs:theme",
+	} {
+		if !strings.Contains(bridgeJSSource, needle) {
+			t.Fatalf("bridge.js missing theme-handshake hook %q", needle)
+		}
+	}
+}
+
 func TestRenderWrapperLeavesScriptSubstringInJSAlone(t *testing.T) {
 	userHTML := []byte(`<html><body><script>var s = "</script>oops";</script></body></html>`)
 	out := string(renderWrapperHTML(userHTML, "https://app.example"))

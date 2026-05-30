@@ -4,6 +4,7 @@ import { api, type Anchor } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
 import { COMMENT_STATUS } from "@/lib/constants";
 import { Center } from "@/components/ui/misc";
+import { useResolvedTheme } from "@/lib/theme";
 import { useDoc } from "./doc-context";
 
 // Renders the sandboxed document iframe and exchanges selection and paint
@@ -14,6 +15,7 @@ export function RenderFrame() {
     useDoc();
   const ref = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
+  const theme = useResolvedTheme();
 
   const token = useQuery({
     queryKey: queryKeys.render(version),
@@ -49,6 +51,18 @@ export function RenderFrame() {
     readyRef.current = false;
   }, [frameOrigin, token.data?.url]);
 
+  // The resolved theme is baked into the iframe URL so the bridge can apply
+  // it before the document's first paint (no flash); live toggles are pushed
+  // over postMessage below.
+  const frameSrc = useMemo(() => {
+    const url = token.data?.url;
+    if (!url) return undefined;
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}aidocs_theme=${theme}`;
+    // theme is intentionally excluded: changing it must not reload the frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token.data?.url]);
+
   const paint = useCallback(() => {
     if (!readyRef.current || !frameOrigin) return;
     ref.current?.contentWindow?.postMessage(
@@ -56,6 +70,15 @@ export function RenderFrame() {
       frameOrigin,
     );
   }, [paintPayload, activeComment, frameOrigin]);
+
+  // Push live theme changes to the bridge once the frame is ready.
+  useEffect(() => {
+    if (!readyRef.current || !frameOrigin) return;
+    ref.current?.contentWindow?.postMessage(
+      { type: "aidocs:theme", theme },
+      frameOrigin,
+    );
+  }, [theme, frameOrigin]);
 
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
@@ -71,11 +94,15 @@ export function RenderFrame() {
       if (e.data?.type === "aidocs:ready") {
         readyRef.current = true;
         paint();
+        ref.current?.contentWindow?.postMessage(
+          { type: "aidocs:theme", theme },
+          frameOrigin,
+        );
       }
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
-  }, [frameOrigin, paint, setSelection, setActiveComment]);
+  }, [frameOrigin, paint, setSelection, setActiveComment, theme]);
 
   // Push fresh paint data once the frame is ready and whenever it changes.
   useEffect(() => {
@@ -91,7 +118,7 @@ export function RenderFrame() {
       ref={ref}
       title="Rendered document"
       className="h-full w-full bg-white"
-      src={token.data!.url}
+      src={frameSrc}
       sandbox="allow-scripts allow-same-origin"
     />
   );

@@ -33,3 +33,26 @@ export function useTheme() {
   const theme = store.useStore();
   return { theme, setTheme: store.write };
 }
+
+function resolve(t: Theme): "light" | "dark" {
+  if (t === "light" || t === "dark") return t;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+// useResolvedTheme returns the concrete "light"/"dark" the reader is seeing,
+// resolving "system" against the OS and re-resolving when the OS flips.
+export function useResolvedTheme(): "light" | "dark" {
+  const theme = store.useStore();
+  const [resolved, setResolved] = React.useState(() => resolve(theme));
+  React.useEffect(() => {
+    setResolved(resolve(theme));
+    if (theme !== "system") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setResolved(resolve("system"));
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [theme]);
+  return resolved;
+}

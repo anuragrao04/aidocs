@@ -6,6 +6,7 @@
     <title>Sample report — Q3 payments incident (demo)</title>
     <style>
       :root {
+        --page: #fff;
         --fg: #18181b;
         --fg-muted: #71717a;
         --border: #e4e4e7;
@@ -16,12 +17,33 @@
         --warning: #d97706;
         --success: #16a34a;
       }
+
+      /*
+        Opt in to the aidocs reader theme. The render bridge sets
+        data-aidocs-theme="light"|"dark" on <html> and keeps it in sync with
+        the app's theme toggle. Documents that ignore this attribute keep
+        their own look, so this block is the only thing wiring us in.
+      */
+      :root[data-aidocs-theme="dark"] {
+        --page: #0b0d12;
+        --fg: #e7ecf3;
+        --fg-muted: #9aa3b2;
+        --border: #232733;
+        --surface: #171a21;
+        --accent: #8b93ff;
+        --accent-soft: #1b2030;
+        --danger: #f87171;
+        --warning: #fbbf24;
+        --success: #4ade80;
+      }
+      html { color-scheme: light; }
+      :root[data-aidocs-theme="dark"] { color-scheme: dark; }
       * { box-sizing: border-box; }
       body {
         font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI",
           Inter, system-ui, sans-serif;
         color: var(--fg);
-        background: #fff;
+        background: var(--page);
         margin: 0;
         padding: 40px 24px 80px;
       }
@@ -129,14 +151,14 @@
         margin: 16px 0;
         font-size: 13.5px;
       }
-      .callout.warn { border-left-color: var(--warning); background: #fffbeb; }
+      .callout.warn { border-left-color: var(--warning); background: var(--accent-soft); }
 
       details {
         border: 1px solid var(--border);
         border-radius: 8px;
         padding: 10px 14px;
         margin: 8px 0 14px;
-        background: #fff;
+        background: var(--page);
       }
       details > summary {
         cursor: pointer;
