@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -10,6 +11,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { api } from "@/api";
 import { publicURL } from "@/lib/config";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,6 +38,17 @@ const AGENT_TARGETS = [
 
 export function StartPage() {
   const { state, setStep, skip } = useOnboarding();
+  const config = useQuery({
+    queryKey: ["config"],
+    queryFn: () => api.getConfig(),
+    staleTime: Infinity,
+  });
+  // Self-hosted/org instances aren't the CLI's hosted default, so the login
+  // command must name this server.
+  const loginCmd =
+    config.data?.deployment === "org"
+      ? `aidocs auth login ${publicURL()}`
+      : "aidocs auth login";
   const { done, total } = onboardingProgress(state);
   const nav = useNavigate();
 
@@ -151,7 +164,7 @@ export function StartPage() {
             One-time. After this, your agent can publish documents on
             your behalf — no keys or tokens to copy around.
           </p>
-          <CodeBlock>{`aidocs auth login`}</CodeBlock>
+          <CodeBlock>{loginCmd}</CodeBlock>
         </Step>
 
         <Step
