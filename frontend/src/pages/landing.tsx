@@ -249,7 +249,7 @@ function SelfHost() {
             </a>
           </Button>
           <Button asChild variant="ghost">
-            <a href="mailto:hi@aidocs.dev?subject=Enterprise%20inquiry">
+            <a href="mailto:raoanu2004@gmail.com?subject=Enterprise%20inquiry">
               Talk to us
             </a>
           </Button>
