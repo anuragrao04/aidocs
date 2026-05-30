@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type Anchor } from "@/api";
 import { queryKeys } from "@/lib/queryKeys";
+import { COMMENT_STATUS } from "@/lib/constants";
 import { Center } from "@/components/ui/misc";
 import { useDoc } from "./doc-context";
 
@@ -22,10 +23,14 @@ export function RenderFrame() {
 
   const paintPayload = useMemo(
     () =>
-      comments.map((c) => ({
-        id: c.id,
-        quote: c.selected_text || c.anchor?.quote,
-      })),
+      comments
+        // Resolved comments keep their anchor server-side (in case a resolve
+        // is reversed) but should not be highlighted in the rendered doc.
+        .filter((c) => c.status !== COMMENT_STATUS.resolved)
+        .map((c) => ({
+          id: c.id,
+          quote: c.selected_text || c.anchor?.quote,
+        })),
     [comments],
   );
 
