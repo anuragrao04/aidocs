@@ -16,11 +16,18 @@ ARG TARGETARCH
 WORKDIR /src
 RUN apk add --no-cache git ca-certificates
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . ./
 COPY --from=frontend /src/frontend/dist ./api/internal/server/frontend_dist
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/aidocs-server ./api/cmd/aidocs-server
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/aidocs ./cli
+# Cache mounts persist the Go build cache and module cache across builds, so a
+# change to one binary's sources doesn't force the other (or unchanged
+# packages) to recompile from scratch.
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/aidocs-server ./api/cmd/aidocs-server
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/aidocs ./cli
 
 FROM alpine:3.22
 # CA certs are arch-independent data files; copy them from the builder rather
