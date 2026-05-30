@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,7 @@ export function ShareSheet({ docId }: { docId: string }) {
       q.invalidateQueries({ queryKey: queryKeys.grants(docId) });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Couldn't share."),
+      toast.error(errorMessage(e, "Couldn't share.")),
   });
   const items = grants.data?.items || [];
   return (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ export function UploadVersionItem({
       q.invalidateQueries({ queryKey: queryKeys.comments(docId) });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Upload failed"),
+      toast.error(errorMessage(e, "Upload failed")),
   });
   return (
     <Sheet open={open} onOpenChange={setOpen}>

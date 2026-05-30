@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import {
   ArrowLeft,
   ExternalLink,
@@ -42,7 +43,7 @@ export function DocBar({
       nav("/app/documents");
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Delete failed"),
+      toast.error(errorMessage(e, "Delete failed")),
   });
   return (
     <div className="flex h-14 items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4">

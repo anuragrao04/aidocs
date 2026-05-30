@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,7 +55,7 @@ export function Comments() {
       q.invalidateQueries({ queryKey: queryKeys.comments(docId) });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Could not add comment"),
+      toast.error(errorMessage(e, "Could not add comment")),
   });
 
   const clear = () => {
@@ -154,7 +155,7 @@ function CommentCard({ c, docId }: { c: Comment; docId: string }) {
     mutationFn: (status: string) => api.patchComment(docId, c.id, c.body, status),
     onSuccess: () => q.invalidateQueries({ queryKey: queryKeys.comments(docId) }),
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Could not update comment"),
+      toast.error(errorMessage(e, "Could not update comment")),
   });
   const resolved = c.status === COMMENT_STATUS.resolved;
   return (

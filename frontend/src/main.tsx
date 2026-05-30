@@ -8,7 +8,6 @@ import {
   useParams,
 } from "react-router-dom";
 import {
-  MutationCache,
   QueryCache,
   QueryClient,
   QueryClientProvider,
@@ -17,6 +16,7 @@ import { Toaster, toast } from "sonner";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import "./styles.css";
 import { APIError } from "@/api";
+import { errorMessage } from "@/lib/errors";
 import { ThemeProvider } from "@/lib/theme";
 import { AppShell } from "@/components/layout/app-shell";
 import { LandingPage } from "@/pages/landing";
@@ -27,11 +27,6 @@ import { ServiceAccountsPage } from "@/pages/service-accounts";
 import { DevelopersPage } from "@/pages/developers";
 import { ProfilePage } from "@/pages/profile";
 import { StartPage } from "@/pages/start";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error && e.message) return e.message;
-  return "Something went wrong.";
-}
 
 // Query failures (other than auth, handled by route guards) and any mutation
 // without its own onError surface as a toast.
@@ -48,7 +43,6 @@ const qc = new QueryClient({
       toast.error(errorMessage(e));
     },
   }),
-  mutationCache: new MutationCache(),
 });
 
 function App() {

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useOnboarding } from "@/lib/onboarding";
+import { useOnboarding, autoMarkFirstDoc } from "@/lib/onboarding";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import {
   FileText,
   MoreHorizontal,
@@ -57,6 +58,12 @@ export function DocumentsPage() {
       nav("/app/start", { replace: true });
     }
   }, [onb, docs.data, nav]);
+  useEffect(() => {
+    // Once the user has at least one document, mark the onboarding step.
+    if (docs.data && (docs.data.items || []).length > 0) {
+      autoMarkFirstDoc();
+    }
+  }, [docs.data]);
   const items = useMemo(() => {
     const list = docs.data?.items || [];
     if (!q) return list;
@@ -151,7 +158,7 @@ function DocRow({ doc }: { doc: Document }) {
       q.invalidateQueries({ queryKey: queryKeys.documents() });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Delete failed"),
+      toast.error(errorMessage(e, "Delete failed")),
   });
   return (
     <tr className="group border-t border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-muted)]/40">
@@ -210,7 +217,7 @@ function EmptyDocs() {
           </Button>
         </div>
       </div>
-      <UploadBackupCard inline />
+      <UploadBackupCard />
     </div>
   );
 }
@@ -227,10 +234,10 @@ function UploadBackupItem() {
   );
 }
 
-function UploadBackupCard({ inline }: { inline?: boolean }) {
+function UploadBackupCard() {
   return (
     <div
-      className={`rounded-[14px] border border-dashed border-[var(--color-border)] p-4 text-center text-sm text-[var(--color-fg-muted)] ${inline ? "" : ""}`}
+      className="rounded-[14px] border border-dashed border-[var(--color-border)] p-4 text-center text-sm text-[var(--color-fg-muted)]"
     >
       Manual fallback —{" "}
       <UploadBackupDialog
@@ -263,7 +270,7 @@ function UploadBackupDialog({ trigger }: { trigger: React.ReactNode }) {
       nav(`/app/d/${r.id}`);
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Upload failed"),
+      toast.error(errorMessage(e, "Upload failed")),
   });
   return (
     <Dialog open={open} onOpenChange={setOpen}>

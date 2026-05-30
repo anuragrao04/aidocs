@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { errorMessage } from "@/lib/errors";
 import { Bot, KeyRound, Plus, Power, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,9 +125,7 @@ export function ServiceAccountsPage() {
 }
 
 function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
-  const id = sa.id;
-  const name = sa.name;
-  const disabled = sa.disabled || false;
+  const { id, name, disabled = false } = sa;
   const q = useQueryClient();
   const url = publicURL();
   const keys = useQuery({
@@ -145,7 +144,7 @@ function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
       setKeyName("default");
       q.invalidateQueries({ queryKey: queryKeys.serviceAccountKeys(id) });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+    onError: (e) => toast.error(errorMessage(e, "Failed")),
   });
   const revokeKey = useMutation({
     mutationFn: (keyID: string) => api.revokeServiceAccountKey(id, keyID),
@@ -154,7 +153,7 @@ function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
       q.invalidateQueries({ queryKey: queryKeys.serviceAccountKeys(id) });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Could not revoke key"),
+      toast.error(errorMessage(e, "Could not revoke key")),
   });
   const toggle = useMutation({
     mutationFn: () => api.updateServiceAccount(id, name, !disabled),
@@ -163,7 +162,7 @@ function ServiceAccountDetail({ sa }: { sa: ServiceAccount }) {
       q.invalidateQueries({ queryKey: queryKeys.serviceAccounts() });
     },
     onError: (e) =>
-      toast.error(e instanceof Error ? e.message : "Could not update bot"),
+      toast.error(errorMessage(e, "Could not update bot")),
   });
 
   return (
@@ -362,7 +361,7 @@ function NewBotDialog({
       setResult({ name: r.name, token: r.key.token });
       onCreated({ id: r.id, name: r.name });
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+    onError: (e) => toast.error(errorMessage(e, "Failed")),
   });
   function reset() {
     setValue("");
