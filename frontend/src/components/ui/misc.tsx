@@ -18,14 +18,6 @@ export function Skeleton({
   );
 }
 
-export function Kbd({ children }: { children: React.ReactNode }) {
-  return (
-    <kbd className="inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-1.5 font-mono text-[10px] text-[var(--color-fg-muted)]">
-      {children}
-    </kbd>
-  );
-}
-
 export function CodeBlock({
   children,
   copy = true,

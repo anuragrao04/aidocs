@@ -73,7 +73,8 @@ export function RenderFrame() {
     paint();
   }, [paint]);
 
-  if (!version) return <Center>No version available.</Center>;
+  // The parent (DocPage) only mounts RenderFrame when a current version
+  // exists, so version is always set here.
   if (token.isLoading) return <Center>Preparing secure render…</Center>;
   if (token.error) return <Center>Could not create render token.</Center>;
   return (

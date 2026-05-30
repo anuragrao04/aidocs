@@ -1,11 +1,12 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { api } from "@/api";
 
 export function LoginPage() {
   const [params] = useSearchParams();
   const next = params.get("next") || "/app/documents";
-  const url = `/v1/auth/google/start?mode=web&redirect=${encodeURIComponent(next)}`;
+  const url = api.loginURL(next);
   return (
     <div className="flex min-h-full flex-col items-center justify-center bg-[var(--color-bg)] px-6 py-12">
       <Link

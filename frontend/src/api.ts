@@ -79,7 +79,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let msg = res.statusText;
     let code = "http_error";
     try {
-      const payload = await res.json();
+      const payload = (await res.json()) as {
+        error?: { message?: string; code?: string };
+      };
       msg = payload.error?.message || msg;
       code = payload.error?.code || code;
     } catch {}
@@ -100,8 +102,8 @@ export const api = {
       user?: Principal;
       service_account?: unknown;
     }>("/v1/me"),
-  loginURL: () =>
-    `/v1/auth/google/start?mode=web&redirect=${encodeURIComponent(location.pathname + location.search)}`,
+  loginURL: (redirect: string = location.pathname + location.search) =>
+    `/v1/auth/google/start?mode=web&redirect=${encodeURIComponent(redirect)}`,
   listDocuments: () => request<{ items: Document[] }>("/v1/documents"),
   getDocument: (id: string) => request<Document>(`/v1/documents/${id}`),
   createDocument: (title: string, visibility: string, file: File) => {
