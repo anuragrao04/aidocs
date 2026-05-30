@@ -14,7 +14,7 @@ import (
 const tld = ".bot"
 
 var (
-	labelRE  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,30})$`)
+	labelRE  = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,29}[a-z0-9])?$`)
 	domainRE = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$`)
 )
 
@@ -27,9 +27,6 @@ var ErrInvalidDomain = errors.New("invalid_domain")
 // ValidateLabel checks the part before the @. Letters, numbers, hyphens; 1-31 chars.
 func ValidateLabel(label string) error {
 	if !labelRE.MatchString(label) {
-		return ErrInvalidLabel
-	}
-	if strings.HasSuffix(label, "-") {
 		return ErrInvalidLabel
 	}
 	return nil
@@ -74,7 +71,7 @@ func Split(s string) (label, domain string, ok bool) {
 }
 
 // GenerateDomain returns a randomly chosen `<adjective>.<noun>.bot` string.
-// Reseeded per call using crypto/rand so callers can retry on collision.
+// Uses crypto/rand for each word so callers can retry on collision.
 func GenerateDomain() string {
 	return fmt.Sprintf("%s.%s%s", pick(adjectives), pick(nouns), tld)
 }

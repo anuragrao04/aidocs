@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+const (
+	audSession = "session"
+	audGeneric = "generic"
+)
+
 type SessionCodec struct{ Secret []byte }
 
 type signedPayload struct {
@@ -18,11 +23,11 @@ type signedPayload struct {
 }
 
 func (s SessionCodec) Sign(userID string) string {
-	return s.SignForAudience(userID, "session", 30*24*time.Hour)
+	return s.SignForAudience(userID, audSession, 30*24*time.Hour)
 }
 
 func (s SessionCodec) SignFor(userID string, ttl time.Duration) string {
-	return s.SignForAudience(userID, "generic", ttl)
+	return s.SignForAudience(userID, audGeneric, ttl)
 }
 
 func (s SessionCodec) SignForAudience(userID, audience string, ttl time.Duration) string {
@@ -35,11 +40,11 @@ func (s SessionCodec) SignForAudience(userID, audience string, ttl time.Duration
 	return "v1." + payloadB64 + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
 func (s SessionCodec) Verify(v string) (string, bool) {
-	return s.VerifyAudience(v, "generic")
+	return s.VerifyAudience(v, audGeneric)
 }
 
 func (s SessionCodec) VerifySession(v string) (string, bool) {
-	return s.VerifyAudience(v, "session")
+	return s.VerifyAudience(v, audSession)
 }
 
 func (s SessionCodec) VerifyAudience(v, audience string) (string, bool) {

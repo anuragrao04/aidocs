@@ -1,3 +1,5 @@
+//go:build testauth
+
 package auth
 
 import (
@@ -5,8 +7,10 @@ import (
 	"strings"
 )
 
-// TestHeaderAuthenticator is intended for API tests only. Production wiring
-// must use a DB-backed authenticator instead.
+// TestHeaderAuthenticator is intended for API tests only. It is compiled only
+// under the `testauth` build tag so it can never be linked into a production
+// binary, preventing accidental identity spoofing via the X-Test-Principal
+// header. Production wiring must use a DB-backed authenticator instead.
 type TestHeaderAuthenticator struct{}
 
 func (TestHeaderAuthenticator) Authenticate(r *http.Request) (*Principal, error) {

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 )
 
@@ -24,7 +25,13 @@ func (a DBAuthenticator) Authenticate(r *http.Request) (*Principal, error) {
 	if token := BearerFromHeader(r.Header.Get("Authorization")); token != "" {
 		p, err := a.Resolver.ResolveBearerToken(r.Context(), HashToken(token))
 		if err != nil {
-			return nil, ErrUnauthorized
+			// Only a genuine "not found" means the credential is invalid.
+			// Propagate everything else (e.g. DB outages) as a 500 so real
+			// failures are not masked as 401 Unauthorized.
+			if errors.Is(err, ErrNotFound) {
+				return nil, ErrUnauthorized
+			}
+			return nil, err
 		}
 		return &p, nil
 	}

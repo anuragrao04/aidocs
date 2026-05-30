@@ -19,8 +19,34 @@ const (
 	RoleOwner     Role = "owner"
 )
 
-var ErrNotFound = errors.New("not found")
+// ErrNotFound wraps auth.ErrNotFound so that packages which cannot import repo
+// (to avoid an import cycle) can still detect not-found via errors.Is.
+var ErrNotFound = fmt.Errorf("not found: %w", auth.ErrNotFound)
 var ErrConflict = errors.New("conflict")
+
+// ErrVersionConflict indicates an optimistic-concurrency failure when creating
+// a new version: the supplied base_version_id is stale. The concrete error
+// returned is a *VersionConflictError carrying the latest version id; callers
+// can match it with errors.Is(err, ErrVersionConflict) or extract details with
+// errors.As(&VersionConflictError{}).
+var ErrVersionConflict = errors.New("version_conflict")
+
+// VersionConflictError carries the current/latest version id alongside the
+// sentinel ErrVersionConflict.
+type VersionConflictError struct {
+	LatestVersionID string
+}
+
+func (e *VersionConflictError) Error() string        { return "version_conflict" }
+func (e *VersionConflictError) Is(target error) bool { return target == ErrVersionConflict }
+
+// Comment / transfer status values.
+const (
+	StatusOpen     = "open"
+	StatusPending  = "pending"
+	StatusAccepted = "accepted"
+	StatusDeclined = "declined"
+)
 
 type Document struct {
 	ID               string
@@ -143,25 +169,38 @@ type Memory struct {
 	saN       int
 	grantN    int
 	commentN  int
+	credN     int
+	sakN      int
 	docs      map[string]Document
 	versions  map[string]Version
 	grants    []Grant
 	users     map[string]auth.Principal
 	creds     map[string]auth.Principal
+	cliCreds  []cliCredRecord
 	sas       map[string]ServiceAccount
 	comments  map[string]Comment
 	transfers map[string]OwnershipTransfer
+
+	// Test-only fixtures, populated by NewMemorySeeded and consulted by
+	// RoleForDocument / PrincipalExists. Kept out of the users/grants stores so
+	// they do not perturb id sequencing in handler tests. Always nil/empty in
+	// production (NewMemory), so the lookups below are inert there.
+	fixtureRoles      map[string]Role
+	fixturePrincipals map[string]bool
 }
 
+type cliCredRecord struct {
+	ID        string
+	UserID    string
+	TokenHash string
+	Name      string
+}
+
+// NewMemory returns an empty in-memory repository. It carries no fixtures so it
+// behaves like a freshly migrated database; tests that need the canonical
+// fixture graph call NewMemorySeeded instead.
 func NewMemory() *Memory {
-	m := &Memory{docs: map[string]Document{}, versions: map[string]Version{}, users: map[string]auth.Principal{}, creds: map[string]auth.Principal{}, sas: map[string]ServiceAccount{}, comments: map[string]Comment{}, transfers: map[string]OwnershipTransfer{}}
-	owner := auth.Principal{Type: auth.PrincipalUser, ID: "owner_1", Email: "owner@example.com", Name: "Owner"}
-	m.users[owner.ID] = owner
-	m.docs["doc_1"] = Document{ID: "doc_1", Title: "fixture", Visibility: "private", Owner: owner, CurrentVersionID: "ver_1"}
-	m.versions["ver_1"] = Version{ID: "ver_1", Number: 1, DocumentID: "doc_1", CreatedBy: owner, SHA256: "sha_1"}
-	m.sas["sa_1"] = ServiceAccount{ID: "sa_1", Name: "fixture", Owner: owner}
-	m.comments["cmt_1"] = Comment{ID: "cmt_1", DocumentID: "doc_1", VersionID: "ver_1", Author: auth.Principal{Type: auth.PrincipalUser, ID: "commenter_1", Email: "commenter@example.com", Name: "Commenter"}, Body: "original", Status: "open"}
-	return m
+	return &Memory{docs: map[string]Document{}, versions: map[string]Version{}, users: map[string]auth.Principal{}, creds: map[string]auth.Principal{}, sas: map[string]ServiceAccount{}, comments: map[string]Comment{}, transfers: map[string]OwnershipTransfer{}}
 }
 
 func (m *Memory) ResolveBearerToken(ctx context.Context, tokenHash string) (auth.Principal, error) {
@@ -207,16 +246,35 @@ func (m *Memory) CreateCLICredential(ctx context.Context, userID, name, tokenHas
 	if !ok {
 		p = auth.Principal{Type: auth.PrincipalUser, ID: userID}
 	}
-	id := fmt.Sprintf("cred_%d", len(m.creds)+1)
+	m.credN++
+	id := fmt.Sprintf("cred_%d", m.credN)
 	m.creds[tokenHash] = p
+	m.cliCreds = append(m.cliCreds, cliCredRecord{ID: id, UserID: userID, TokenHash: tokenHash, Name: name})
 	return id, nil
 }
 
 func (m *Memory) ListCLICredentials(ctx context.Context, userID string) ([]CLICredential, error) {
-	return []CLICredential{}, nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := []CLICredential{}
+	for _, c := range m.cliCreds {
+		if c.UserID == userID {
+			out = append(out, CLICredential{ID: c.ID, Name: c.Name})
+		}
+	}
+	return out, nil
 }
 func (m *Memory) RevokeCLICredential(ctx context.Context, userID, credentialID string) error {
-	return nil
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i, c := range m.cliCreds {
+		if c.ID == credentialID && c.UserID == userID {
+			delete(m.creds, c.TokenHash)
+			m.cliCreds = append(m.cliCreds[:i], m.cliCreds[i+1:]...)
+			return nil
+		}
+	}
+	return ErrNotFound
 }
 
 func (m *Memory) RoleForDocument(ctx context.Context, p auth.Principal, documentID string) (Role, error) {
@@ -231,16 +289,9 @@ func (m *Memory) RoleForDocument(ctx context.Context, p auth.Principal, document
 			return g.Role, nil
 		}
 	}
-	// Development fixture convention for API tests.
-	switch p.ID {
-	case "owner_1":
-		return RoleOwner, nil
-	case "editor_1":
-		return RoleEditor, nil
-	case "commenter_1":
-		return RoleCommenter, nil
-	case "viewer_1":
-		return RoleViewer, nil
+	// Test fixture convention for API tests (see NewMemorySeeded); inert in production.
+	if role, ok := m.fixtureRoles[p.ID]; ok {
+		return role, nil
 	}
 	return "", ErrNotFound
 }
@@ -303,7 +354,10 @@ func (m *Memory) PrincipalExists(ctx context.Context, p auth.Principal) (bool, e
 	defer m.mu.Unlock()
 	switch p.Type {
 	case auth.PrincipalUser:
-		if _, ok := m.users[p.ID]; ok || p.ID == "owner_1" || p.ID == "viewer_1" || p.ID == "editor_1" || p.ID == "commenter_1" {
+		if _, ok := m.users[p.ID]; ok {
+			return true, nil
+		}
+		if m.fixturePrincipals[p.ID] {
 			return true, nil
 		}
 	case auth.PrincipalServiceAccount:
@@ -345,7 +399,7 @@ func (m *Memory) CreateVersion(ctx context.Context, documentID, baseVersionID, c
 		return Version{}, ErrNotFound
 	}
 	if baseVersionID != d.CurrentVersionID {
-		return Version{ID: d.CurrentVersionID}, errors.New("version_conflict")
+		return Version{ID: d.CurrentVersionID}, &VersionConflictError{LatestVersionID: d.CurrentVersionID}
 	}
 	m.verN++
 	v := Version{ID: fmt.Sprintf("ver_%d", m.verN), Number: m.verN, DocumentID: documentID, CreatedBy: createdBy, ChangeSummary: changeSummary, SHA256: fmt.Sprintf("sha_%d", m.verN)}
@@ -362,7 +416,7 @@ func (m *Memory) CreateComment(ctx context.Context, documentID, versionID, body 
 		return Comment{}, ErrNotFound
 	}
 	m.commentN++
-	cm := Comment{ID: fmt.Sprintf("cmt_%d", m.commentN), DocumentID: documentID, VersionID: versionID, Author: author, Body: body, SelectedText: anchor.Quote, Anchor: anchor, Status: "open"}
+	cm := Comment{ID: fmt.Sprintf("cmt_%d", m.commentN), DocumentID: documentID, VersionID: versionID, Author: author, Body: body, SelectedText: anchor.Quote, Anchor: anchor, Status: StatusOpen}
 	m.comments[cm.ID] = cm
 	return cm, nil
 }
@@ -416,8 +470,15 @@ func (m *Memory) UpdateServiceAccount(ctx context.Context, id, name string, disa
 func (m *Memory) CreateServiceAccountKey(ctx context.Context, saID, name, tokenHash string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	id := fmt.Sprintf("sak_%d", len(m.creds)+1)
-	m.creds[tokenHash] = auth.Principal{Type: auth.PrincipalServiceAccount, ID: saID, Name: saID}
+	m.sakN++
+	id := fmt.Sprintf("sak_%d", m.sakN)
+	// The principal represents the service account identity; its Name is the
+	// service account's name (not the SA id, and not the key name).
+	saName := ""
+	if sa, ok := m.sas[saID]; ok {
+		saName = sa.Name
+	}
+	m.creds[tokenHash] = auth.Principal{Type: auth.PrincipalServiceAccount, ID: saID, Name: saName}
 	return id, nil
 }
 func (m *Memory) ListServiceAccountKeys(ctx context.Context, saID string) ([]ServiceAccountKey, error) {
@@ -491,10 +552,27 @@ func (m *Memory) DeleteComment(ctx context.Context, id string) error { return ni
 func (m *Memory) CreateOwnershipTransfer(ctx context.Context, saID string, from auth.Principal, toEmail string) (OwnershipTransfer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Resolve the target email to a stable user ID so ToUserID has the same
+	// meaning as the Postgres implementation (which stores a resolved user id,
+	// not an email). AcceptOwnershipTransfer compares ToUserID to user.ID.
+	toID := m.resolveUserIDByEmailLocked(toEmail)
 	id := fmt.Sprintf("xfer_%d", len(m.transfers)+1)
-	x := OwnershipTransfer{ID: id, ServiceAccountID: saID, FromUserID: from.ID, ToUserID: toEmail, Status: "pending"}
+	x := OwnershipTransfer{ID: id, ServiceAccountID: saID, FromUserID: from.ID, ToUserID: toID, Status: StatusPending}
 	m.transfers[id] = x
 	return x, nil
+}
+
+// resolveUserIDByEmailLocked returns the id of an existing user with the given
+// email, creating a placeholder user if none exists. Caller must hold m.mu.
+func (m *Memory) resolveUserIDByEmailLocked(email string) string {
+	for _, p := range m.users {
+		if strings.EqualFold(p.Email, email) {
+			return p.ID
+		}
+	}
+	id := fmt.Sprintf("usr_%d", len(m.users)+1)
+	m.users[id] = auth.Principal{Type: auth.PrincipalUser, ID: id, Email: email}
+	return id
 }
 func (m *Memory) ListOwnershipTransfers(ctx context.Context, user auth.Principal) ([]OwnershipTransfer, error) {
 	return []OwnershipTransfer{}, nil
@@ -503,10 +581,10 @@ func (m *Memory) AcceptOwnershipTransfer(ctx context.Context, id string, user au
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	x, ok := m.transfers[id]
-	if !ok || x.ToUserID != user.ID || x.Status != "pending" {
+	if !ok || x.ToUserID != user.ID || x.Status != StatusPending {
 		return x, errors.New("not allowed")
 	}
-	x.Status = "accepted"
+	x.Status = StatusAccepted
 	m.transfers[id] = x
 	return x, nil
 }
@@ -517,7 +595,7 @@ func (m *Memory) DeclineOwnershipTransfer(ctx context.Context, id string, user a
 	if !ok || (x.FromUserID != user.ID && x.ToUserID != user.ID) {
 		return ErrNotFound
 	}
-	x.Status = "declined"
+	x.Status = StatusDeclined
 	m.transfers[id] = x
 	return nil
 }

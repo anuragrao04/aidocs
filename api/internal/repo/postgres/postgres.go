@@ -19,6 +19,9 @@ import (
 	"github.com/anuragrao/aidocs/api/internal/repo"
 )
 
+// htmlContentType is the content type stored for all version HTML blobs.
+const htmlContentType = "text/html; charset=utf-8"
+
 type Store struct {
 	db    *pgxpool.Pool
 	q     *dbsqlc.Queries
@@ -75,7 +78,10 @@ func (s *Store) ResolveUser(ctx context.Context, id string) (auth.Principal, err
 	if errors.Is(err, pgx.ErrNoRows) {
 		return auth.Principal{}, repo.ErrNotFound
 	}
-	return auth.Principal{Type: auth.PrincipalUser, ID: u.ID, Email: u.Email, Name: u.Name, PictureURL: u.PictureUrl}, err
+	if err != nil {
+		return auth.Principal{}, err
+	}
+	return auth.Principal{Type: auth.PrincipalUser, ID: u.ID, Email: u.Email, Name: u.Name, PictureURL: u.PictureUrl}, nil
 }
 func (s *Store) UpsertGoogleUser(ctx context.Context, id, email, name, googleSub, pictureURL string) (auth.Principal, error) {
 	err := s.q.UpsertGoogleUser(ctx, dbsqlc.UpsertGoogleUserParams{ID: id, Email: email, Name: name, GoogleSub: pgtype.Text{String: googleSub, Valid: true}, PictureUrl: pictureURL})
@@ -83,7 +89,10 @@ func (s *Store) UpsertGoogleUser(ctx context.Context, id, email, name, googleSub
 		return auth.Principal{}, err
 	}
 	u, err := s.q.GetUserByGoogleSub(ctx, pgtype.Text{String: googleSub, Valid: true})
-	return auth.Principal{Type: auth.PrincipalUser, ID: u.ID, Email: u.Email, Name: u.Name, PictureURL: u.PictureUrl}, err
+	if err != nil {
+		return auth.Principal{}, err
+	}
+	return auth.Principal{Type: auth.PrincipalUser, ID: u.ID, Email: u.Email, Name: u.Name, PictureURL: u.PictureUrl}, nil
 }
 func (s *Store) EnsureUserByEmail(ctx context.Context, email string) (auth.Principal, error) {
 	u, err := s.q.GetUserByEmail(ctx, email)
@@ -150,7 +159,7 @@ func (s *Store) CreateDocument(ctx context.Context, owner auth.Principal, title,
 	docID, verID := newID("doc"), newID("ver")
 	blobKey := fmt.Sprintf("docs/%s/%s.html", docID, verID)
 	sum := sha(html)
-	if err := s.blobs.Put(ctx, blobKey, "text/html; charset=utf-8", html); err != nil {
+	if err := s.blobs.Put(ctx, blobKey, htmlContentType, html); err != nil {
 		return repo.Document{}, repo.Version{}, err
 	}
 	committed := false
@@ -219,7 +228,7 @@ func (s *Store) GetServiceAccount(ctx context.Context, id string) (repo.ServiceA
 	if err != nil {
 		return repo.ServiceAccount{}, err
 	}
-	return repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: asBool(r.Disabled), Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}, nil
+	return repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: r.Disabled, Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}, nil
 }
 func (s *Store) GetServiceAccountByName(ctx context.Context, name string) (repo.ServiceAccount, error) {
 	r, err := s.q.GetServiceAccountByName(ctx, name)
@@ -229,7 +238,7 @@ func (s *Store) GetServiceAccountByName(ctx context.Context, name string) (repo.
 	if err != nil {
 		return repo.ServiceAccount{}, err
 	}
-	return repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: asBool(r.Disabled), Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}, nil
+	return repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: r.Disabled, Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}, nil
 }
 func (s *Store) PrincipalExists(ctx context.Context, p auth.Principal) (bool, error) {
 	switch p.Type {
@@ -258,8 +267,10 @@ func (s *Store) CreateGrant(ctx context.Context, documentID string, principal au
 			return repo.Grant{}, err
 		}
 	}
-	id := newID("gr")
-	id, err = q.UpsertResourceGrant(ctx, dbsqlc.UpsertResourceGrantParams{ID: id, ResourceID: documentID, PrincipalType: string(principal.Type), PrincipalID: principal.ID, Role: string(role), GrantedByUserID: grantedBy.ID})
+	// The upsert returns the authoritative id (the existing row's id on
+	// conflict, or the newly generated one on insert), so we trust its result
+	// rather than keeping a second, possibly-discarded local id.
+	id, err := q.UpsertResourceGrant(ctx, dbsqlc.UpsertResourceGrantParams{ID: newID("gr"), ResourceID: documentID, PrincipalType: string(principal.Type), PrincipalID: principal.ID, Role: string(role), GrantedByUserID: grantedBy.ID})
 	if err != nil {
 		return repo.Grant{}, err
 	}
@@ -284,12 +295,12 @@ func (s *Store) CreateVersion(ctx context.Context, documentID, baseVersionID, ch
 		return repo.Version{}, err
 	}
 	if cur.CurrentVersionID.String != baseVersionID {
-		return repo.Version{ID: cur.CurrentVersionID.String}, errors.New("version_conflict")
+		return repo.Version{ID: cur.CurrentVersionID.String}, &repo.VersionConflictError{LatestVersionID: cur.CurrentVersionID.String}
 	}
 	id := newID("ver")
 	blobKey := fmt.Sprintf("docs/%s/%s.html", documentID, id)
 	sum := sha(html)
-	if err := s.blobs.Put(ctx, blobKey, "text/html; charset=utf-8", html); err != nil {
+	if err := s.blobs.Put(ctx, blobKey, htmlContentType, html); err != nil {
 		return repo.Version{}, err
 	}
 	committed := false
@@ -327,7 +338,7 @@ func (s *Store) CreateComment(ctx context.Context, documentID, versionID, body s
 	if err != nil {
 		return repo.Comment{}, err
 	}
-	return repo.Comment{ID: id, DocumentID: documentID, VersionID: versionID, Author: author, Body: body, SelectedText: anchor.Quote, Anchor: anchor, Status: "open"}, nil
+	return repo.Comment{ID: id, DocumentID: documentID, VersionID: versionID, Author: author, Body: body, SelectedText: anchor.Quote, Anchor: anchor, Status: repo.StatusOpen}, nil
 }
 func upsertUser(ctx context.Context, q *dbsqlc.Queries, p auth.Principal) error {
 	return q.UpsertUser(ctx, dbsqlc.UpsertUserParams{ID: p.ID, Email: p.Email, Name: p.Name})
@@ -368,7 +379,7 @@ func (s *Store) ListServiceAccounts(ctx context.Context, owner auth.Principal) (
 	}
 	out := make([]repo.ServiceAccount, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: asBool(r.Disabled), Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}})
+		out = append(out, repo.ServiceAccount{ID: r.ID, Name: r.Name, Disabled: r.Disabled, Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}})
 	}
 	return out, nil
 }
@@ -454,7 +465,10 @@ func (s *Store) GetVersion(ctx context.Context, id string) (repo.Version, error)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return repo.Version{}, repo.ErrNotFound
 	}
-	return repo.Version{ID: r.ID, Number: int(r.Number), DocumentID: r.DocumentID, CreatedBy: auth.Principal{Type: auth.PrincipalType(r.CreatedByType), ID: r.CreatedByID}, ChangeSummary: r.ChangeSummary, SHA256: r.Sha256}, err
+	if err != nil {
+		return repo.Version{}, err
+	}
+	return repo.Version{ID: r.ID, Number: int(r.Number), DocumentID: r.DocumentID, CreatedBy: auth.Principal{Type: auth.PrincipalType(r.CreatedByType), ID: r.CreatedByID}, ChangeSummary: r.ChangeSummary, SHA256: r.Sha256}, nil
 }
 func (s *Store) GetVersionHTML(ctx context.Context, id string) ([]byte, error) {
 	key, err := s.q.GetVersionBlobKey(ctx, id)
@@ -519,7 +533,7 @@ func (s *Store) CreateOwnershipTransfer(ctx context.Context, saID string, from a
 	}
 	id := newID("xfer")
 	err = s.q.InsertOwnershipTransfer(ctx, dbsqlc.InsertOwnershipTransferParams{ID: id, ServiceAccountID: saID, FromUserID: from.ID, ToUserID: toID})
-	return repo.OwnershipTransfer{ID: id, ServiceAccountID: saID, FromUserID: from.ID, ToUserID: toID, Status: "pending"}, err
+	return repo.OwnershipTransfer{ID: id, ServiceAccountID: saID, FromUserID: from.ID, ToUserID: toID, Status: repo.StatusPending}, err
 }
 func (s *Store) ListOwnershipTransfers(ctx context.Context, user auth.Principal) ([]repo.OwnershipTransfer, error) {
 	rows, err := s.q.ListOwnershipTransfers(ctx, user.ID)
@@ -540,6 +554,9 @@ func (s *Store) AcceptOwnershipTransfer(ctx context.Context, id string, user aut
 	defer tx.Rollback(ctx)
 	q := s.q.WithTx(tx)
 	r, err := q.GetOwnershipTransferForUpdate(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return repo.OwnershipTransfer{}, repo.ErrNotFound
+	}
 	if err != nil {
 		return repo.OwnershipTransfer{}, err
 	}
@@ -547,7 +564,7 @@ func (s *Store) AcceptOwnershipTransfer(ctx context.Context, id string, user aut
 	if x.ToUserID != user.ID {
 		return x, errors.New("not target")
 	}
-	if x.Status != "pending" {
+	if x.Status != repo.StatusPending {
 		return x, errors.New("transfer not pending")
 	}
 	if err := q.UpdateServiceAccountOwner(ctx, dbsqlc.UpdateServiceAccountOwnerParams{OwnerUserID: user.ID, ID: x.ServiceAccountID}); err != nil {
@@ -556,7 +573,7 @@ func (s *Store) AcceptOwnershipTransfer(ctx context.Context, id string, user aut
 	if _, err := q.AcceptOwnershipTransfer(ctx, id); err != nil {
 		return x, err
 	}
-	x.Status = "accepted"
+	x.Status = repo.StatusAccepted
 	return x, tx.Commit(ctx)
 }
 func (s *Store) DeclineOwnershipTransfer(ctx context.Context, id string, user auth.Principal) error {
@@ -583,4 +600,3 @@ func commentFromList(r dbsqlc.ListCommentsRow) repo.Comment {
 	_ = json.Unmarshal(r.AnchorJson, &c.Anchor)
 	return c
 }
-func asBool(v any) bool { b, _ := v.(bool); return b }

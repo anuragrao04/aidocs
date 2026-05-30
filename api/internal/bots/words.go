@@ -5,7 +5,7 @@ package bots
 // no offensive overlap, no rude homophones.
 
 var adjectives = []string{
-	"agile", "amber", "amused", "ancient", "amber", "arctic", "ardent", "artful",
+	"agile", "amber", "amused", "ancient", "arctic", "ardent", "artful",
 	"bold", "brave", "breezy", "bright", "brisk", "bubbly", "busy",
 	"calm", "candid", "chatty", "cheerful", "cheery", "civic", "classic", "clever",
 	"comet", "cosmic", "cozy", "crafty", "crimson", "crisp", "curious", "cuddly",

@@ -28,7 +28,7 @@ func (q *Queries) EnableServiceAccount(ctx context.Context, id string) error {
 }
 
 const getServiceAccount = `-- name: GetServiceAccount :one
-SELECT sa.id, sa.name, sa.disabled_at IS NOT NULL AS disabled, u.id AS owner_id, u.email AS owner_email, u.name AS owner_name
+SELECT sa.id, sa.name, (sa.disabled_at IS NOT NULL)::bool AS disabled, u.id AS owner_id, u.email AS owner_email, u.name AS owner_name
 FROM service_accounts sa
 JOIN users u ON u.id = sa.owner_user_id
 WHERE sa.id = $1
@@ -37,7 +37,7 @@ WHERE sa.id = $1
 type GetServiceAccountRow struct {
 	ID         string
 	Name       string
-	Disabled   interface{}
+	Disabled   bool
 	OwnerID    string
 	OwnerEmail string
 	OwnerName  string
@@ -58,7 +58,7 @@ func (q *Queries) GetServiceAccount(ctx context.Context, id string) (GetServiceA
 }
 
 const getServiceAccountByName = `-- name: GetServiceAccountByName :one
-SELECT sa.id, sa.name, sa.disabled_at IS NOT NULL AS disabled, u.id AS owner_id, u.email AS owner_email, u.name AS owner_name
+SELECT sa.id, sa.name, (sa.disabled_at IS NOT NULL)::bool AS disabled, u.id AS owner_id, u.email AS owner_email, u.name AS owner_name
 FROM service_accounts sa
 JOIN users u ON u.id = sa.owner_user_id
 WHERE sa.name = $1
@@ -67,7 +67,7 @@ WHERE sa.name = $1
 type GetServiceAccountByNameRow struct {
 	ID         string
 	Name       string
-	Disabled   interface{}
+	Disabled   bool
 	OwnerID    string
 	OwnerEmail string
 	OwnerName  string
@@ -153,14 +153,14 @@ func (q *Queries) ListServiceAccountKeys(ctx context.Context, serviceAccountID s
 }
 
 const listServiceAccounts = `-- name: ListServiceAccounts :many
-SELECT sa.id,sa.name,sa.disabled_at IS NOT NULL AS disabled,u.id AS owner_id,u.email AS owner_email,u.name AS owner_name
+SELECT sa.id,sa.name,(sa.disabled_at IS NOT NULL)::bool AS disabled,u.id AS owner_id,u.email AS owner_email,u.name AS owner_name
 FROM service_accounts sa JOIN users u ON u.id=sa.owner_user_id WHERE sa.owner_user_id=$1 ORDER BY sa.created_at DESC
 `
 
 type ListServiceAccountsRow struct {
 	ID         string
 	Name       string
-	Disabled   interface{}
+	Disabled   bool
 	OwnerID    string
 	OwnerEmail string
 	OwnerName  string
