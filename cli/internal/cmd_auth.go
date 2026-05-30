@@ -124,10 +124,27 @@ func loginCmd(g *globals, out io.Writer) *cobra.Command {
 }
 
 func whoamiCmd(g *globals, out io.Writer) *cobra.Command {
-	return &cobra.Command{Use: "whoami", Short: "Show the authenticated principal", RunE: func(cmd *cobra.Command, args []string) error {
-		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.do("GET", "/v1/me", nil, "")
-		})
+	return &cobra.Command{Use: "whoami", Short: "Show the authenticated principal and server", RunE: func(cmd *cobra.Command, args []string) error {
+		cl, err := client(g)
+		if err != nil {
+			return err
+		}
+		b, err := cl.do("GET", "/v1/me", nil, "")
+		if err != nil {
+			return err
+		}
+		if g.quiet {
+			return nil
+		}
+		if g.json {
+			return render(out, g, b)
+		}
+		var m map[string]any
+		if json.Unmarshal(b, &m) != nil {
+			return render(out, g, b)
+		}
+		fmt.Fprintln(out, humanize("", m)+"  server="+cl.Base)
+		return nil
 	}}
 }
 

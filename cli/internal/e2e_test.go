@@ -13,7 +13,8 @@ import (
 	"testing"
 )
 
-func TestCLICommandsE2E(t *testing.T) {
+// e2eMux builds the mock aidocs API used by the CLI end-to-end tests.
+func e2eMux(t *testing.T) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/me", jsonH(map[string]any{"principal": map[string]any{"type": "user", "id": "usr_1"}, "user": map[string]any{"id": "usr_1", "email": "me@example.com", "name": "Me"}}))
 	mux.HandleFunc("/v1/documents", func(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +104,11 @@ func TestCLICommandsE2E(t *testing.T) {
 	mux.HandleFunc("/v1/service-accounts/transfers", jsonH(map[string]any{"items": []any{map[string]any{"id": "xfer_1"}}}))
 	mux.HandleFunc("/v1/service-accounts/transfers/xfer_1/accept", jsonH(map[string]any{"id": "xfer_1", "status": "accepted"}))
 	mux.HandleFunc("/v1/service-accounts/transfers/xfer_1/decline", jsonH(map[string]any{"id": "xfer_1", "status": "declined"}))
-	srv := httptest.NewServer(mux)
+	return mux
+}
+
+func TestCLICommandsE2E(t *testing.T) {
+	srv := httptest.NewServer(e2eMux(t))
 	defer srv.Close()
 	t.Setenv("AIDOCS_TOKEN", "tok")
 	t.Setenv("AIDOCS_SERVER", srv.URL)
@@ -122,6 +127,81 @@ func TestCLICommandsE2E(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(out); string(b) != "<h1>ok</h1>" {
 		t.Fatalf("pull wrote %q", b)
+	}
+}
+
+// TestCommandOutputsAreConversational locks in the action-indicative output
+// of mutating commands so it can't silently regress to raw API rows. The
+// default (non-JSON) output must tell the caller what just happened.
+func TestCommandOutputsAreConversational(t *testing.T) {
+	srv := httptest.NewServer(e2eMux(t))
+	defer srv.Close()
+	t.Setenv("AIDOCS_TOKEN", "tok")
+	t.Setenv("AIDOCS_SERVER", srv.URL)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AIDOCS_NO_BROWSER", "1")
+	html := filepath.Join(t.TempDir(), "x.html")
+	os.WriteFile(html, []byte("<h1>x</h1>"), 0644)
+	out := filepath.Join(t.TempDir(), "out.html")
+
+	cases := []struct {
+		args []string
+		want []string
+	}{
+		{[]string{"auth", "whoami"}, []string{"me@example.com", "server=" + srv.URL}},
+		{[]string{"docs", "create", html}, []string{"Created document", "doc_new"}},
+		{[]string{"docs", "update", "doc_1", "--title", "New"}, []string{"Updated document", "doc_1"}},
+		{[]string{"docs", "pull", "doc_1", "--out", out}, []string{"Pulled version", "doc_1"}},
+		{[]string{"docs", "push", "doc_1", html}, []string{"Pushed version", "ver_2"}},
+		{[]string{"docs", "comments", "create", "doc_1", "--body", "hi", "--quote", "x", "--version", "ver_1"}, []string{"Added comment"}},
+		{[]string{"docs", "comments", "delete", "doc_1", "cmt_1"}, []string{"Deleted comment", "cmt_1"}},
+		{[]string{"docs", "comments", "resolve", "doc_1", "cmt_1"}, []string{"Resolved comment", "cmt_1"}},
+		{[]string{"docs", "comments", "reopen", "doc_1", "cmt_1"}, []string{"Reopened comment", "cmt_1"}},
+		{[]string{"docs", "grants", "add", "doc_1", "--to", "a@b.com", "--role", "viewer"}, []string{"Shared", "a@b.com", "viewer"}},
+		{[]string{"docs", "grants", "revoke", "doc_1", "gr_1"}, []string{"Revoked grant", "gr_1"}},
+		{[]string{"sa", "update", "sa_1", "--disable"}, []string{"Disabled service account", "sa_1"}},
+		{[]string{"sa", "key", "create", "sa_1"}, []string{"Created key", "Copy this key"}},
+		{[]string{"sa", "key", "revoke", "sa_1", "sak_1"}, []string{"Revoked key", "sak_1"}},
+		{[]string{"sa", "transfer", "sa_1", "--to", "new@example.com"}, []string{"Requested transfer", "new@example.com"}},
+		{[]string{"sa", "transfer", "accept", "xfer_1"}, []string{"Accepted transfer", "xfer_1"}},
+		{[]string{"sa", "transfer", "decline", "xfer_1"}, []string{"Declined transfer", "xfer_1"}},
+		{[]string{"open", "doc_1"}, []string{"doc_1"}},
+		{[]string{"context", "use", srv.URL}, []string{"Switched to context"}},
+	}
+	for _, tc := range cases {
+		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
+			got, err := Execute(tc.args)
+			if err != nil {
+				t.Fatalf("%v", err)
+			}
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Fatalf("output %q does not contain %q", got, w)
+				}
+			}
+		})
+	}
+}
+
+// TestJSONOutputStaysMachineReadable ensures --json keeps returning the raw
+// API payload (not the conversational line) for mutating commands.
+func TestJSONOutputStaysMachineReadable(t *testing.T) {
+	srv := httptest.NewServer(e2eMux(t))
+	defer srv.Close()
+	t.Setenv("AIDOCS_TOKEN", "tok")
+	t.Setenv("AIDOCS_SERVER", srv.URL)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	got, err := Execute([]string{"--json", "docs", "update", "doc_1", "--title", "New"})
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	if strings.Contains(got, "\u2713") || strings.Contains(got, "Updated document") {
+		t.Fatalf("--json output should be the raw payload, got %q", got)
+	}
+	var m map[string]any
+	if json.Unmarshal([]byte(got), &m) != nil {
+		t.Fatalf("--json output is not valid JSON: %q", got)
 	}
 }
 
