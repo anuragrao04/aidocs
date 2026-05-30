@@ -10,6 +10,14 @@ type PrincipalType string
 const (
 	PrincipalUser           PrincipalType = "user"
 	PrincipalServiceAccount PrincipalType = "service_account"
+	// PrincipalAnyone represents "everyone who can authenticate to this
+	// server". On an org deployment the login gate scopes that set to the
+	// org's members. It is stored as a grant with an empty principal id.
+	PrincipalAnyone PrincipalType = "anyone"
+	// PrincipalAnonymous represents an unauthenticated caller. It is defined
+	// for forward compatibility (no-login access) but is never produced in
+	// this version: authentication is required on every route.
+	PrincipalAnonymous PrincipalType = "anonymous"
 )
 
 type Principal struct {

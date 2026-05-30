@@ -27,7 +27,7 @@ func TestPostgresRepositoryDocumentGrantVersionCommentFlow(t *testing.T) {
 	defer store.Close()
 
 	owner := auth.Principal{Type: auth.PrincipalUser, ID: "usr_pg_owner", Email: "pg-owner@example.com", Name: "Owner"}
-	doc, ver, err := store.CreateDocument(context.Background(), owner, "Postgres doc", "private", []byte("<html>v1</html>"))
+	doc, ver, err := store.CreateDocument(context.Background(), owner, "Postgres doc", []byte("<html>v1</html>"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestPostgresCreateDocumentDeletesBlobWhenDBFailsAfterPut(t *testing.T) {
 	defer store.Close()
 
 	owner := auth.Principal{Type: auth.PrincipalUser, ID: "usr_blob_cleanup_doc", Email: "blob-cleanup-doc@example.com", Name: "Owner"}
-	_, _, err = store.CreateDocument(ctx, owner, "cleanup doc", "private", []byte("<html>cleanup</html>"))
+	_, _, err = store.CreateDocument(ctx, owner, "cleanup doc", []byte("<html>cleanup</html>"))
 	if err == nil {
 		t.Fatal("CreateDocument succeeded; want context cancellation after blob put")
 	}
@@ -121,7 +121,7 @@ func TestPostgresCreateVersionDeletesBlobWhenDBFailsAfterPut(t *testing.T) {
 	defer store.Close()
 
 	owner := auth.Principal{Type: auth.PrincipalUser, ID: "usr_blob_cleanup_ver", Email: "blob-cleanup-ver@example.com", Name: "Owner"}
-	doc, ver, err := store.CreateDocument(context.Background(), owner, "cleanup version", "private", []byte("<html>v1</html>"))
+	doc, ver, err := store.CreateDocument(context.Background(), owner, "cleanup version", []byte("<html>v1</html>"))
 	if err != nil {
 		t.Fatal(err)
 	}

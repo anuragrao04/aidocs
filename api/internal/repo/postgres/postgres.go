@@ -136,17 +136,41 @@ func (s *Store) RoleForDocument(ctx context.Context, p auth.Principal, documentI
 	if err != nil {
 		return "", err
 	}
+	best := repo.RoleNone
 	if p.Type == auth.PrincipalUser && p.ID == ownerID {
-		return repo.RoleOwner, nil
+		best = repo.RoleOwner
 	}
-	role, err := s.q.GetDocumentGrantRole(ctx, dbsqlc.GetDocumentGrantRoleParams{ResourceID: documentID, PrincipalType: string(p.Type), PrincipalID: p.ID})
-	if errors.Is(err, pgx.ErrNoRows) {
+	// Explicit grant for this exact principal.
+	if role, err := s.grantRole(ctx, documentID, string(p.Type), p.ID); err != nil {
+		return "", err
+	} else {
+		best = repo.MaxRole(best, role)
+	}
+	// "anyone" grant applies to every audience that reached this server.
+	if role, err := s.grantRole(ctx, documentID, string(auth.PrincipalAnyone), ""); err != nil {
+		return "", err
+	} else {
+		best = repo.MaxRole(best, role)
+	}
+	if best == repo.RoleNone {
 		return "", repo.ErrNotFound
 	}
-	return repo.Role(role), err
+	return best, nil
 }
 
-func (s *Store) CreateDocument(ctx context.Context, owner auth.Principal, title, visibility string, html []byte) (repo.Document, repo.Version, error) {
+// grantRole returns the role of a single grant, or RoleNone if none exists.
+func (s *Store) grantRole(ctx context.Context, documentID, principalType, principalID string) (repo.Role, error) {
+	role, err := s.q.GetDocumentGrantRole(ctx, dbsqlc.GetDocumentGrantRoleParams{ResourceID: documentID, PrincipalType: principalType, PrincipalID: principalID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return repo.RoleNone, nil
+	}
+	if err != nil {
+		return repo.RoleNone, err
+	}
+	return repo.Role(role), nil
+}
+
+func (s *Store) CreateDocument(ctx context.Context, owner auth.Principal, title string, html []byte) (repo.Document, repo.Version, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return repo.Document{}, repo.Version{}, err
@@ -168,7 +192,7 @@ func (s *Store) CreateDocument(ctx context.Context, owner auth.Principal, title,
 			_ = s.blobs.Delete(context.WithoutCancel(ctx), blobKey)
 		}
 	}()
-	if err := q.InsertDocument(ctx, dbsqlc.InsertDocumentParams{ID: docID, Title: title, OwnerID: owner.ID, Visibility: visibility}); err != nil {
+	if err := q.InsertDocument(ctx, dbsqlc.InsertDocumentParams{ID: docID, Title: title, OwnerID: owner.ID}); err != nil {
 		return repo.Document{}, repo.Version{}, err
 	}
 	if err := q.InsertInitialVersion(ctx, dbsqlc.InsertInitialVersionParams{ID: verID, DocumentID: docID, HtmlBlobKey: blobKey, Sha256: sum, CreatedByType: string(owner.Type), CreatedByID: owner.ID}); err != nil {
@@ -181,7 +205,7 @@ func (s *Store) CreateDocument(ctx context.Context, owner auth.Principal, title,
 		return repo.Document{}, repo.Version{}, err
 	}
 	committed = true
-	return repo.Document{ID: docID, Title: title, Visibility: visibility, Owner: owner, CurrentVersionID: verID}, repo.Version{ID: verID, Number: 1, DocumentID: docID, CreatedBy: owner, SHA256: sum}, nil
+	return repo.Document{ID: docID, Title: title, Owner: owner, CurrentVersionID: verID}, repo.Version{ID: verID, Number: 1, DocumentID: docID, CreatedBy: owner, SHA256: sum}, nil
 }
 func (s *Store) GetDocument(ctx context.Context, id string) (repo.Document, error) {
 	r, err := s.q.GetDocument(ctx, id)
@@ -356,14 +380,9 @@ func (s *Store) ListDocuments(ctx context.Context, p auth.Principal) ([]repo.Doc
 	}
 	return out, nil
 }
-func (s *Store) UpdateDocument(ctx context.Context, id, title, visibility string) (repo.Document, error) {
+func (s *Store) UpdateDocument(ctx context.Context, id, title string) (repo.Document, error) {
 	if title != "" {
 		if err := s.q.UpdateDocumentTitle(ctx, dbsqlc.UpdateDocumentTitleParams{Title: title, ID: id}); err != nil {
-			return repo.Document{}, err
-		}
-	}
-	if visibility != "" {
-		if err := s.q.UpdateDocumentVisibility(ctx, dbsqlc.UpdateDocumentVisibilityParams{Visibility: visibility, ID: id}); err != nil {
 			return repo.Document{}, err
 		}
 	}
@@ -585,10 +604,10 @@ func (s *Store) DeclineOwnershipTransfer(ctx context.Context, id string, user au
 }
 
 func docFromGet(r dbsqlc.GetDocumentRow) repo.Document {
-	return repo.Document{ID: r.ID, Title: r.Title, Visibility: r.Visibility, CurrentVersionID: r.CurrentVersionID.String, Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}
+	return repo.Document{ID: r.ID, Title: r.Title, CurrentVersionID: r.CurrentVersionID.String, Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}
 }
 func docFromList(r dbsqlc.ListDocumentsRow) repo.Document {
-	return repo.Document{ID: r.ID, Title: r.Title, Visibility: r.Visibility, CurrentVersionID: r.CurrentVersionID.String, Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}
+	return repo.Document{ID: r.ID, Title: r.Title, CurrentVersionID: r.CurrentVersionID.String, Owner: auth.Principal{Type: auth.PrincipalUser, ID: r.OwnerID, Email: r.OwnerEmail, Name: r.OwnerName}}
 }
 func commentFromGet(r dbsqlc.GetCommentRow) repo.Comment {
 	c := repo.Comment{ID: r.ID, DocumentID: r.DocumentID, VersionID: r.CreatedOnVersionID, Author: auth.Principal{Type: auth.PrincipalType(r.AuthorType), ID: r.AuthorID, Email: r.AuthorEmail, Name: r.AuthorName}, Body: r.Body, SelectedText: r.SelectedText, Status: r.Status}

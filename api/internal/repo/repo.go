@@ -13,11 +13,23 @@ import (
 type Role string
 
 const (
+	RoleNone      Role = ""
 	RoleViewer    Role = "viewer"
 	RoleCommenter Role = "commenter"
 	RoleEditor    Role = "editor"
 	RoleOwner     Role = "owner"
 )
+
+var roleRank = map[Role]int{RoleViewer: 1, RoleCommenter: 2, RoleEditor: 3, RoleOwner: 4}
+
+// MaxRole returns whichever role grants more access. RoleNone ("") ranks below
+// every real role, so MaxRole(RoleNone, x) == x.
+func MaxRole(a, b Role) Role {
+	if roleRank[b] > roleRank[a] {
+		return b
+	}
+	return a
+}
 
 // ErrNotFound wraps auth.ErrNotFound so that packages which cannot import repo
 // (to avoid an import cycle) can still detect not-found via errors.Is.
@@ -58,7 +70,6 @@ const (
 type Document struct {
 	ID               string         `json:"id"`
 	Title            string         `json:"title"`
-	Visibility       string         `json:"visibility"`
 	Owner            auth.Principal `json:"owner"`
 	CurrentVersionID string         `json:"current_version_id"`
 }
@@ -135,10 +146,10 @@ type Repository interface {
 	ListCLICredentials(ctx context.Context, userID string) ([]CLICredential, error)
 	RevokeCLICredential(ctx context.Context, userID, credentialID string) error
 	RoleForDocument(ctx context.Context, principal auth.Principal, documentID string) (Role, error)
-	CreateDocument(ctx context.Context, owner auth.Principal, title, visibility string, html []byte) (Document, Version, error)
+	CreateDocument(ctx context.Context, owner auth.Principal, title string, html []byte) (Document, Version, error)
 	ListDocuments(ctx context.Context, principal auth.Principal) ([]Document, error)
 	GetDocument(ctx context.Context, id string) (Document, error)
-	UpdateDocument(ctx context.Context, id, title, visibility string) (Document, error)
+	UpdateDocument(ctx context.Context, id, title string) (Document, error)
 	DeleteDocument(ctx context.Context, id string) error
 	CreateServiceAccount(ctx context.Context, owner auth.Principal, name string) (ServiceAccount, error)
 	ListServiceAccounts(ctx context.Context, owner auth.Principal) ([]ServiceAccount, error)
@@ -287,28 +298,43 @@ func (m *Memory) RevokeCLICredential(ctx context.Context, userID, credentialID s
 func (m *Memory) RoleForDocument(ctx context.Context, p auth.Principal, documentID string) (Role, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	d, ok := m.docs[documentID]
-	if ok && p.Type == auth.PrincipalUser && p.ID == d.Owner.ID {
-		return RoleOwner, nil
+	if _, ok := m.docs[documentID]; !ok {
+		// Fall through to fixture handling below for API tests that seed roles
+		// without a backing document.
+		if role, ok := m.fixtureRoles[p.ID]; ok {
+			return role, nil
+		}
+		return "", ErrNotFound
+	}
+	best := RoleNone
+	if d := m.docs[documentID]; p.Type == auth.PrincipalUser && p.ID == d.Owner.ID {
+		best = RoleOwner
 	}
 	for _, g := range m.grants {
-		if g.DocumentID == documentID && g.Principal.Type == p.Type && g.Principal.ID == p.ID {
-			return g.Role, nil
+		if g.DocumentID != documentID {
+			continue
+		}
+		// An explicit grant matches this exact principal; an "anyone" grant
+		// matches every audience.
+		if (g.Principal.Type == p.Type && g.Principal.ID == p.ID) || g.Principal.Type == auth.PrincipalAnyone {
+			best = MaxRole(best, g.Role)
 		}
 	}
-	// Test fixture convention for API tests (see NewMemorySeeded); inert in production.
 	if role, ok := m.fixtureRoles[p.ID]; ok {
-		return role, nil
+		best = MaxRole(best, role)
 	}
-	return "", ErrNotFound
+	if best == RoleNone {
+		return "", ErrNotFound
+	}
+	return best, nil
 }
 
-func (m *Memory) CreateDocument(ctx context.Context, owner auth.Principal, title, visibility string, html []byte) (Document, Version, error) {
+func (m *Memory) CreateDocument(ctx context.Context, owner auth.Principal, title string, html []byte) (Document, Version, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.docN++
 	m.verN++
-	d := Document{ID: fmt.Sprintf("doc_%d", m.docN), Title: title, Visibility: visibility, Owner: owner, CurrentVersionID: fmt.Sprintf("ver_%d", m.verN)}
+	d := Document{ID: fmt.Sprintf("doc_%d", m.docN), Title: title, Owner: owner, CurrentVersionID: fmt.Sprintf("ver_%d", m.verN)}
 	v := Version{ID: d.CurrentVersionID, Number: 1, DocumentID: d.ID, CreatedBy: owner, SHA256: fmt.Sprintf("sha_%d", m.verN)}
 	m.docs[d.ID] = d
 	m.versions[v.ID] = v
@@ -442,7 +468,7 @@ func (m *Memory) ListDocuments(ctx context.Context, principal auth.Principal) ([
 	}
 	return out, nil
 }
-func (m *Memory) UpdateDocument(ctx context.Context, id, title, visibility string) (Document, error) {
+func (m *Memory) UpdateDocument(ctx context.Context, id, title string) (Document, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	d, ok := m.docs[id]
@@ -451,9 +477,6 @@ func (m *Memory) UpdateDocument(ctx context.Context, id, title, visibility strin
 	}
 	if title != "" {
 		d.Title = title
-	}
-	if visibility != "" {
-		d.Visibility = visibility
 	}
 	m.docs[id] = d
 	return d, nil
