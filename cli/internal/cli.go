@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -182,13 +183,26 @@ func normalizeServer(s string) string {
 		if i := strings.Index(host, "/"); i >= 0 {
 			host = host[:i]
 		}
-		if strings.HasPrefix(host, "localhost") || strings.HasPrefix(host, "127.0.0.1") || strings.HasPrefix(host, "[::1]") {
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		if isLoopbackHost(host) {
 			s = "http://" + s
 		} else {
 			s = "https://" + s
 		}
 	}
 	return strings.TrimRight(s, "/")
+}
+
+// isLoopbackHost reports whether host is exactly a loopback address, so we only
+// downgrade to http:// for genuine localhost (not e.g. localhost.evil.com).
+func isLoopbackHost(host string) bool {
+	switch strings.ToLower(host) {
+	case "localhost", "127.0.0.1", "::1", "[::1]":
+		return true
+	}
+	return false
 }
 
 func readFileArg(p string) ([]byte, string, error) {

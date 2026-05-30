@@ -95,7 +95,7 @@ func loginCmd(g *globals, out io.Writer) *cobra.Command {
 		}
 
 		cl := &Client{Base: srv, HTTP: http.DefaultClient}
-		b, err := cl.json("POST", "/v1/auth/cli/exchange", map[string]any{"code": code, "code_verifier": verifier, "name": first(name, ctxName(srv))})
+		b, err := cl.doJSON("POST", "/v1/auth/cli/exchange", map[string]any{"code": code, "code_verifier": verifier, "name": first(name, ctxName(srv))})
 		if err != nil {
 			return err
 		}
@@ -103,7 +103,10 @@ func loginCmd(g *globals, out io.Writer) *cobra.Command {
 		if err := json.Unmarshal(b, &cred); err != nil {
 			return fmt.Errorf("could not parse login response: %w", err)
 		}
-		cfg, _ := loadConfig()
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
 		if cfg.Contexts == nil {
 			cfg.Contexts = map[string]*Context{}
 		}
@@ -131,7 +134,10 @@ func whoamiCmd(g *globals, out io.Writer) *cobra.Command {
 func logoutCmd(g *globals, out io.Writer) *cobra.Command {
 	var localOnly, keepKeychain bool
 	cmd := &cobra.Command{Use: "logout", Short: "Revoke and remove the stored credential for the active context", RunE: func(cmd *cobra.Command, args []string) error {
-		name, cx, cfg := currentContext(g)
+		name, cx, cfg, err := currentContextE(g)
+		if err != nil {
+			return err
+		}
 		if !localOnly {
 			if id, ok := cx.Credential["id"].(string); ok && id != "" {
 				cl, err := client(g)

@@ -17,7 +17,10 @@ func contextCmd(g *globals, out io.Writer) *cobra.Command {
 		}
 		return render(out, g, b)
 	}}, &cobra.Command{Use: "use <server>", Short: "Switch the active context", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, _ := loadConfig()
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
 		name := ctxName(args[0])
 		if cfg.Contexts == nil {
 			cfg.Contexts = map[string]*Context{}
@@ -26,7 +29,11 @@ func contextCmd(g *globals, out io.Writer) *cobra.Command {
 			cfg.Contexts[name] = &Context{Server: normalizeServer(args[0]), Pulled: map[string]string{}}
 		}
 		cfg.ActiveContext = name
-		return saveConfig(cfg)
+		if err := saveConfig(cfg); err != nil {
+			return err
+		}
+		message(out, g, "Switched to "+name)
+		return nil
 	}})
 	return c
 }

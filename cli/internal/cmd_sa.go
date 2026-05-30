@@ -47,7 +47,7 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 				body["domain"] = domain
 			}
 			body["label"] = label
-			b, err := cl.json("POST", "/v1/service-accounts", body)
+			b, err := cl.doJSON("POST", "/v1/service-accounts", body)
 			if err != nil {
 				return err
 			}
@@ -86,8 +86,11 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 		if disable {
 			body["disabled"] = true
 		}
+		if len(body) == 0 {
+			return errors.New("nothing to update; pass --name, --enable, or --disable")
+		}
 		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.json("PATCH", apiPath("/v1/service-accounts/%s", args[0]), body)
+			return c.doJSON("PATCH", apiPath("/v1/service-accounts/%s", args[0]), body)
 		})
 	}}
 	upd.Flags().StringVar(&newName, "name", "", "new service account name")
@@ -96,7 +99,7 @@ func saRoot(g *globals, out io.Writer) *cobra.Command {
 	key := &cobra.Command{Use: "key", Short: "Manage service account keys"}
 	keyCreate := &cobra.Command{Use: "create <sa_id>", Short: "Create a service account key", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.json("POST", apiPath("/v1/service-accounts/%s/keys", args[0]), map[string]any{"name": first(name, "default")})
+			return c.doJSON("POST", apiPath("/v1/service-accounts/%s/keys", args[0]), map[string]any{"name": first(name, "default")})
 		})
 	}}
 	keyCreate.Flags().StringVar(&name, "name", "default", "key name")
@@ -114,7 +117,7 @@ func transferCmd(g *globals, out io.Writer) *cobra.Command {
 	var to string
 	c := &cobra.Command{Use: "transfer <sa_id>", Short: "Transfer service account ownership", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.json("POST", apiPath("/v1/service-accounts/%s/transfer", args[0]), map[string]any{"to_user_email": to})
+			return c.doJSON("POST", apiPath("/v1/service-accounts/%s/transfer", args[0]), map[string]any{"to_user_email": to})
 		})
 	}}
 	c.Flags().StringVar(&to, "to", "", "email of the user to transfer ownership to")

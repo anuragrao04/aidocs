@@ -37,8 +37,11 @@ func docsCmd(g *globals, out io.Writer) *cobra.Command {
 		if cmd.Flags().Changed("visibility") {
 			body["visibility"] = uv
 		}
+		if len(body) == 0 {
+			return errors.New("nothing to update; pass --title and/or --visibility")
+		}
 		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.json("PATCH", apiPath("/v1/documents/%s", args[0]), body)
+			return c.doJSON("PATCH", apiPath("/v1/documents/%s", args[0]), body)
 		})
 	}}
 	update.Flags().StringVar(&ut, "title", "", "new document title")
@@ -69,7 +72,7 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 				return errors.New("pass --to <email-or-bot-address>")
 			}
 			return run(g, out, func(c *Client) ([]byte, error) {
-				return c.json("POST", apiPath("/v1/documents/%s/grants", args[0]), body)
+				return c.doJSON("POST", apiPath("/v1/documents/%s/grants", args[0]), body)
 			})
 		},
 	}
@@ -79,7 +82,7 @@ func grantsCmd(g *globals, out io.Writer) *cobra.Command {
 	var r string
 	upd := &cobra.Command{Use: "update <doc_id> <grant_id>", Short: "Update a grant role", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
 		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.json("PATCH", apiPath("/v1/documents/%s/grants/%s", args[0], args[1]), map[string]any{"role": r})
+			return c.doJSON("PATCH", apiPath("/v1/documents/%s/grants/%s", args[0], args[1]), map[string]any{"role": r})
 		})
 	}}
 	upd.Flags().StringVar(&r, "role", "viewer", "new grant role: viewer, commenter, editor, or owner")
@@ -145,20 +148,9 @@ func pullCmd(g *globals, out io.Writer) *cobra.Command {
 }
 
 func docsPushCmd(g *globals, out io.Writer) *cobra.Command {
-	return pushVersionCmd(g, out, "push <doc_id> <file>", "Upload a new document version", "  aidocs docs push doc_123 report.html --base-version ver_123\n  aidocs docs push doc_123 report.html --summary 'Address comments'", 2, func(args []string) (string, string, error) {
-		return args[0], args[1], nil
-	})
-}
-
-// pushVersionCmd builds a push command. argc is the explicit argument count so
-// argument validation is not coupled to the help text.
-func pushVersionCmd(g *globals, out io.Writer, use, short, example string, argc int, resolve func([]string) (string, string, error)) *cobra.Command {
 	var base, summary string
-	cmd := &cobra.Command{Use: use, Short: short, Example: example, Args: exactArgs(argc), RunE: func(cmd *cobra.Command, args []string) error {
-		doc, file, err := resolve(args)
-		if err != nil {
-			return err
-		}
+	cmd := &cobra.Command{Use: "push <doc_id> <file>", Short: "Upload a new document version", Example: "  aidocs docs push doc_123 report.html --base-version ver_123\n  aidocs docs push doc_123 report.html --summary 'Address comments'", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		doc, file := args[0], args[1]
 		data, fn, err := readFileArg(file)
 		if err != nil {
 			return err
@@ -210,8 +202,11 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 
 	var createBody, createQuote, createPrefix, createSuffix, createVersion string
 	create := &cobra.Command{Use: "create <doc_id>", Short: "Create a document comment", Args: exactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		if createBody == "" || createVersion == "" || createQuote == "" {
+			return errors.New("--body, --version, and --quote are required")
+		}
 		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.json("POST", apiPath("/v1/documents/%s/comments", args[0]), map[string]any{"body": createBody, "version_id": createVersion, "anchor": map[string]any{"quote": createQuote, "prefix": createPrefix, "suffix": createSuffix}})
+			return c.doJSON("POST", apiPath("/v1/documents/%s/comments", args[0]), map[string]any{"body": createBody, "version_id": createVersion, "anchor": map[string]any{"quote": createQuote, "prefix": createPrefix, "suffix": createSuffix}})
 		})
 	}}
 	create.Flags().StringVar(&createBody, "body", "", "comment body text")
@@ -222,8 +217,11 @@ func commentsCmd(g *globals, out io.Writer) *cobra.Command {
 
 	var updateBody, updateStatus string
 	update := &cobra.Command{Use: "update <doc_id> <comment_id>", Short: "Update a document comment", Args: exactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		if updateBody == "" && updateStatus == "" {
+			return errors.New("nothing to update; pass --body and/or --status")
+		}
 		return run(g, out, func(c *Client) ([]byte, error) {
-			return c.json("PATCH", apiPath("/v1/documents/%s/comments/%s", args[0], args[1]), map[string]any{"body": updateBody, "status": updateStatus})
+			return c.doJSON("PATCH", apiPath("/v1/documents/%s/comments/%s", args[0], args[1]), map[string]any{"body": updateBody, "status": updateStatus})
 		})
 	}}
 	update.Flags().StringVar(&updateBody, "body", "", "new comment body text")
@@ -253,7 +251,7 @@ func resolveCmd(g *globals, out io.Writer, name, status string) *cobra.Command {
 		}
 		docID := args[0]
 		for _, id := range args[1:] {
-			b, err := cl.json("PATCH", apiPath("/v1/documents/%s/comments/%s", docID, id), map[string]any{"status": status})
+			b, err := cl.doJSON("PATCH", apiPath("/v1/documents/%s/comments/%s", docID, id), map[string]any{"status": status})
 			if err != nil {
 				return err
 			}
