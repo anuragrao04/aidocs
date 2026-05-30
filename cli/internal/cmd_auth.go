@@ -2,9 +2,11 @@ package internal
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -40,35 +42,37 @@ func loginCmd(g *globals, out io.Writer) *cobra.Command {
 		defer ln.Close()
 		resultCh := make(chan callbackResult, 1)
 		redirect := "http://" + ln.Addr().String() + "/callback"
+		fail := func(w http.ResponseWriter, status int, detail, sendErr string) {
+			writeLoginPage(w, status, false, detail)
+			select {
+			case resultCh <- callbackResult{err: errors.New(sendErr)}:
+			default:
+			}
+		}
 		mux := http.NewServeMux()
-		mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			// Only /callback carries the OAuth result; anything else (favicon,
+			// stray reloads after completion) gets a friendly page, never a raw
+			// "404 page not found".
+			if r.URL.Path != "/callback" {
+				writeLoginPage(w, http.StatusOK, true, "You can close this tab and return to your terminal.")
+				return
+			}
 			q := r.URL.Query()
 			if q.Get("state") != state {
-				http.Error(w, "bad state", http.StatusBadRequest)
-				select {
-				case resultCh <- callbackResult{err: errors.New("login callback returned an unexpected state value")}:
-				default:
-				}
+				fail(w, http.StatusBadRequest, "The login request could not be verified. Please run the command again.", "login callback returned an unexpected state value")
 				return
 			}
 			if e := q.Get("error"); e != "" {
-				http.Error(w, "login failed: "+e, http.StatusBadRequest)
-				select {
-				case resultCh <- callbackResult{err: fmt.Errorf("login failed: %s", e)}:
-				default:
-				}
+				fail(w, http.StatusBadRequest, "Google reported an error: "+e, "login failed: "+e)
 				return
 			}
 			code := q.Get("code")
 			if code == "" {
-				http.Error(w, "missing code", http.StatusBadRequest)
-				select {
-				case resultCh <- callbackResult{err: errors.New("login callback did not include an authorization code")}:
-				default:
-				}
+				fail(w, http.StatusBadRequest, "No authorization code was returned. Please run the command again.", "login callback did not include an authorization code")
 				return
 			}
-			fmt.Fprintln(w, "aidocs auth login complete. You can close this tab.")
+			writeLoginPage(w, http.StatusOK, true, "You can close this tab and return to your terminal.")
 			select {
 			case resultCh <- callbackResult{code: code}:
 			default:
@@ -76,7 +80,13 @@ func loginCmd(g *globals, out io.Writer) *cobra.Command {
 		})
 		srvHTTP := &http.Server{Handler: mux}
 		go srvHTTP.Serve(ln)
-		defer srvHTTP.Close()
+		// Shut down gracefully so the browser finishes loading the success page
+		// before the listener closes (an abrupt Close races the final response).
+		defer func() {
+			sdCtx, sdCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer sdCancel()
+			_ = srvHTTP.Shutdown(sdCtx)
+		}()
 		loginURL := srv + "/v1/auth/google/start?mode=cli&state=" + url.QueryEscape(state) + "&cli_redirect=" + url.QueryEscape(redirect) + "&code_challenge=" + url.QueryEscape(challenge)
 		message(out, g, "Opening "+loginURL)
 		openBrowser(loginURL)
@@ -182,6 +192,28 @@ func logoutCmd(g *globals, out io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&localOnly, "local", false, "only remove the local credential; do not revoke on the server")
 	cmd.Flags().BoolVar(&keepKeychain, "keep-keychain", false, "preserve keychain token entry while removing config (for backups/tests)")
 	return cmd
+}
+
+//go:embed login_page.html
+var loginPageHTML string
+
+var loginPageTmpl = template.Must(template.New("login").Parse(loginPageHTML))
+
+// writeLoginPage serves the OAuth callback tab, styled to match the aidocs web
+// theme. The page lives in login_page.html (embedded); tone is selected by a
+// body class so no markup or styles are injected.
+func writeLoginPage(w http.ResponseWriter, status int, ok bool, detail string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Signal a complete response so the browser doesn't keep the connection
+	// open past the listener's graceful shutdown.
+	w.Header().Set("Connection", "close")
+	w.WriteHeader(status)
+
+	data := struct{ Class, Title, Detail string }{Class: "ok", Title: "You're signed in", Detail: detail}
+	if !ok {
+		data.Class, data.Title = "err", "Login failed"
+	}
+	_ = loginPageTmpl.Execute(w, data)
 }
 
 func authCmd(g *globals, out io.Writer) *cobra.Command {
