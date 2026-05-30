@@ -40,9 +40,16 @@ func (a DBAuthenticator) Authenticate(r *http.Request) (*Principal, error) {
 			uid, ok := (SessionCodec{Secret: []byte(a.SessionSecret)}).VerifySession(ck.Value)
 			if ok {
 				p, err := a.Resolver.ResolveUser(r.Context(), uid)
-				if err == nil {
-					return &p, nil
+				if err != nil {
+					// As with bearer auth, only a genuine "not found"
+					// means the session is invalid; surface everything
+					// else (e.g. DB outages) instead of masking as 401.
+					if errors.Is(err, ErrNotFound) {
+						return nil, ErrUnauthorized
+					}
+					return nil, err
 				}
+				return &p, nil
 			}
 		}
 	}

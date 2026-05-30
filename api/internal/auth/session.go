@@ -9,10 +9,7 @@ import (
 	"time"
 )
 
-const (
-	audSession = "session"
-	audGeneric = "generic"
-)
+const audSession = "session"
 
 type SessionCodec struct{ Secret []byte }
 
@@ -26,10 +23,6 @@ func (s SessionCodec) Sign(userID string) string {
 	return s.SignForAudience(userID, audSession, 30*24*time.Hour)
 }
 
-func (s SessionCodec) SignFor(userID string, ttl time.Duration) string {
-	return s.SignForAudience(userID, audGeneric, ttl)
-}
-
 func (s SessionCodec) SignForAudience(userID, audience string, ttl time.Duration) string {
 	p := signedPayload{Subject: userID, Audience: audience, ExpiresAt: time.Now().Add(ttl).Unix()}
 	payload, _ := json.Marshal(p)
@@ -39,10 +32,6 @@ func (s SessionCodec) SignForAudience(userID, audience string, ttl time.Duration
 	sig := mac.Sum(nil)
 	return "v1." + payloadB64 + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
-func (s SessionCodec) Verify(v string) (string, bool) {
-	return s.VerifyAudience(v, audGeneric)
-}
-
 func (s SessionCodec) VerifySession(v string) (string, bool) {
 	return s.VerifyAudience(v, audSession)
 }

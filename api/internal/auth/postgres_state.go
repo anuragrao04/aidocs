@@ -23,7 +23,7 @@ func NewPostgresStateStore(db *pgxpool.Pool) *PostgresStateStore {
 
 func (s *PostgresStateStore) PutState(ctx context.Context, id string, st LoginState) error {
 	if st.ExpiresAt.IsZero() {
-		st.ExpiresAt = time.Now().Add(10 * time.Minute)
+		st.ExpiresAt = time.Now().Add(defaultStateTTL)
 	}
 	return s.put(ctx, oauthStateKind, id, st)
 }
@@ -33,7 +33,7 @@ func (s *PostgresStateStore) TakeState(ctx context.Context, id string) (LoginSta
 }
 
 func (s *PostgresStateStore) PutCode(ctx context.Context, code string, st LoginState) error {
-	st.ExpiresAt = time.Now().Add(5 * time.Minute)
+	st.ExpiresAt = time.Now().Add(codeTTL)
 	return s.put(ctx, oauthCodeKind, code, st)
 }
 
@@ -80,14 +80,16 @@ func (s *PostgresStateStore) take(ctx context.Context, kind, id string) (LoginSt
 		// can alert on OAuth/CLI exchange failures.
 		return LoginState{}, false, err
 	}
+	// Commit the delete regardless of expiry so a consumed/expired row is not
+	// left behind for CleanupExpired to reap later.
+	if err := tx.Commit(ctx); err != nil {
+		return LoginState{}, false, err
+	}
 	if time.Now().After(expiresAt) {
 		return LoginState{}, false, nil
 	}
 	var st LoginState
 	if err := json.Unmarshal(raw, &st); err != nil {
-		return LoginState{}, false, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return LoginState{}, false, err
 	}
 	return st, true, nil
