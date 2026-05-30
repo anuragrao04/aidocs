@@ -47,6 +47,28 @@ http://localhost:8080/v1/auth/google/callback
 Optionally restrict logins to specific email domains with
 `ALLOWED_OAUTH_DOMAINS=example.com,company.com`.
 
+### Deployment type: public vs org
+
+aidocs runs in one of two modes, set by `AIDOCS_DEPLOYMENT`:
+
+- **`public`** (default) — anyone with a Google account can sign in. Sharing a
+  document with "everyone" means *anyone with the link*.
+- **`org`** — Google login is gated to your organization's domains
+  (`AIDOCS_ORG_DOMAINS`, a comma-separated list that supports multiple domains
+  for acquisitions). Sharing with "everyone" then means *anyone in the org*,
+  because only org members can authenticate. Set `AIDOCS_ORG_NAME` to label the
+  org in the UI (e.g. "Anyone in Acme").
+
+On an org deployment the org domains are the login gate, so you do not also
+need `ALLOWED_OAUTH_DOMAINS`. The document permission model is identical in both
+modes; only the login gate and the wording differ.
+
+```text
+AIDOCS_DEPLOYMENT=org
+AIDOCS_ORG_DOMAINS=acme.com,acme-labs.io
+AIDOCS_ORG_NAME=Acme
+```
+
 ## Docker
 
 Build the image from source, or pull the prebuilt image from GHCR.
@@ -271,7 +293,10 @@ Terminate TLS at nginx, Caddy, or any reverse proxy of your choice.
 | `AIDOCS_ADDR` | `:8080` | TCP listen address. |
 | `AIDOCS_MIGRATE` | `true` | Run database migrations on boot. Set `false` to skip. |
 | `AIDOCS_COMMIT_SHA` / `COMMIT_SHA` | unset | Build revision exposed at `/commit.txt`. |
-| `ALLOWED_OAUTH_DOMAINS` | unset | Comma-separated email-domain allowlist for OAuth logins. |
+| `ALLOWED_OAUTH_DOMAINS` | unset | Comma-separated email-domain allowlist for OAuth logins (public deployments). |
+| `AIDOCS_DEPLOYMENT` | `public` | `public` or `org`. An org deployment gates login to `AIDOCS_ORG_DOMAINS`. |
+| `AIDOCS_ORG_DOMAINS` | unset | Comma-separated org domains. Required when `AIDOCS_DEPLOYMENT=org`; also the login gate. |
+| `AIDOCS_ORG_NAME` | unset | Org display name used in share UI copy (e.g. "Anyone in Acme"). |
 | `BLOB_REGION` | `us-east-1` | AWS region for the S3 client. |
 | `BLOB_ENDPOINT` | unset | Custom S3 endpoint (MinIO, R2, etc.). |
 | `BLOB_ACCESS_KEY_ID` | unset | Override AWS-SDK default credential chain. |
