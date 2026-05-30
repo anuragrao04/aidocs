@@ -33,6 +33,14 @@ func commentPlacement(cm repo.Comment, placementVersionID, placementHTML string)
 	return
 }
 
+// userJSON renders a user principal without the "type" field, for endpoints
+// that already convey the principal type separately.
+func userJSON(p auth.Principal) gin.H {
+	out := principalJSON(p)
+	delete(out, "type")
+	return out
+}
+
 func principalJSON(p auth.Principal) gin.H {
 	out := gin.H{"type": p.Type, "id": p.ID}
 	if p.Email != "" {

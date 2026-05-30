@@ -26,12 +26,10 @@ import (
 // @Success 201 {object} map[string]interface{}
 // @Router /v1/documents/{id}/versions [post]
 func (h handlers) createVersion(c *gin.Context) {
-	p := current(c)
-	role, _ := h.deps.repository.RoleForDocument(c.Request.Context(), *p, c.Param("id"))
-	if !atLeast(role, repo.RoleEditor) {
-		forbidden(c, "editor role required")
+	if !h.needDocRole(c, c.Param("id"), repo.RoleEditor) {
 		return
 	}
+	p := current(c)
 	html, err := readMultipartFile(c, "file")
 	if errors.Is(err, errPayloadTooLarge) {
 		c.JSON(http.StatusRequestEntityTooLarge, errorResponse("payload_too_large", "HTML file exceeds 10 MiB", nil))
@@ -46,8 +44,8 @@ func (h handlers) createVersion(c *gin.Context) {
 	if err != nil {
 		// A conflict means the base version was stale; report the current one.
 		if errors.Is(err, repo.ErrVersionConflict) {
+			var latestID string
 			var vce *repo.VersionConflictError
-			latestID := v.ID // fallback: still populated by Memory/Postgres
 			if errors.As(err, &vce) {
 				latestID = vce.LatestVersionID
 			}
@@ -70,12 +68,8 @@ func (h handlers) createVersion(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Router /v1/versions/{id}/render-token [post]
 func (h handlers) createRenderToken(c *gin.Context) {
-	v, err := h.deps.repository.GetVersion(c.Request.Context(), c.Param("id"))
-	if err != nil {
-		notFound(c)
-		return
-	}
-	if !h.needDocRole(c, v.DocumentID, repo.RoleViewer) {
+	v, ok := h.loadVersionForViewer(c)
+	if !ok {
 		return
 	}
 	token := (auth.SessionCodec{Secret: []byte(h.deps.sessionSecret)}).SignForAudience(renderAudiencePrefix+v.ID, "render", 5*time.Minute)
@@ -152,15 +146,26 @@ func (h handlers) listVersions(c *gin.Context) {
 // @Success 200 {object} repo.Version
 // @Router /v1/versions/{id} [get]
 func (h handlers) getVersion(c *gin.Context) {
-	v, err := h.deps.repository.GetVersion(c.Request.Context(), c.Param("id"))
-	if err != nil {
-		notFound(c)
-		return
-	}
-	if !h.needDocRole(c, v.DocumentID, repo.RoleViewer) {
+	v, ok := h.loadVersionForViewer(c)
+	if !ok {
 		return
 	}
 	c.JSON(http.StatusOK, v)
+}
+
+// loadVersionForViewer fetches the version named by the :id param and verifies
+// the caller has at least viewer access to its document. It writes the
+// appropriate error response and returns ok=false when either check fails.
+func (h handlers) loadVersionForViewer(c *gin.Context) (repo.Version, bool) {
+	v, err := h.deps.repository.GetVersion(c.Request.Context(), c.Param("id"))
+	if err != nil {
+		notFound(c)
+		return repo.Version{}, false
+	}
+	if !h.needDocRole(c, v.DocumentID, repo.RoleViewer) {
+		return repo.Version{}, false
+	}
+	return v, true
 }
 
 // GetVersionHTML godoc
@@ -173,12 +178,7 @@ func (h handlers) getVersion(c *gin.Context) {
 // @Success 200 {string} string
 // @Router /v1/versions/{id}/html [get]
 func (h handlers) getVersionHTML(c *gin.Context) {
-	v, err := h.deps.repository.GetVersion(c.Request.Context(), c.Param("id"))
-	if err != nil {
-		notFound(c)
-		return
-	}
-	if !h.needDocRole(c, v.DocumentID, repo.RoleViewer) {
+	if _, ok := h.loadVersionForViewer(c); !ok {
 		return
 	}
 	b, err := h.deps.repository.GetVersionHTML(c.Request.Context(), c.Param("id"))

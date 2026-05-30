@@ -36,6 +36,10 @@ const (
 // Render audience prefix used in render tokens.
 const renderAudiencePrefix = "render:"
 
+// labelUnknown is the metric label value used when a dimension is not
+// meaningful for an event (e.g. a comment's status after it is deleted).
+const labelUnknown = "unknown"
+
 // googleUserIDPrefix prefixes user IDs minted from a Google subject.
 const googleUserIDPrefix = "usr_google_"
 

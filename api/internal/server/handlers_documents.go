@@ -112,7 +112,10 @@ func (h handlers) patchDocument(c *gin.Context) {
 		return
 	}
 	var in struct{ Title, Visibility string }
-	_ = c.ShouldBindJSON(&in)
+	if err := c.ShouldBindJSON(&in); err != nil {
+		badRequest(c, "invalid body")
+		return
+	}
 	if in.Visibility != "" && !validVisibility(in.Visibility) {
 		badRequest(c, "invalid visibility")
 		return

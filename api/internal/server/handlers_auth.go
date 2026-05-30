@@ -240,9 +240,7 @@ func (h handlers) me(c *gin.Context) {
 	p := current(c)
 	out := gin.H{"principal": gin.H{"type": p.Type, "id": p.ID}}
 	if p.Type == auth.PrincipalUser {
-		user := principalJSON(*p)
-		delete(user, "type")
-		out["user"] = user
+		out["user"] = userJSON(*p)
 	} else {
 		sa, err := h.deps.repository.GetServiceAccount(c.Request.Context(), p.ID)
 		if err != nil {

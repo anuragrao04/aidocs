@@ -79,7 +79,7 @@ func (h handlers) createServiceAccount(c *gin.Context) {
 	sa, fullName, err := allocateServiceAccountName(c, h.deps.repository, *p, in.Label, in.Domain)
 	if err != nil {
 		if errors.Is(err, repo.ErrConflict) && in.Domain != "" {
-			c.JSON(http.StatusConflict, gin.H{"error": "address_taken", "message": "Someone already uses " + fullName + ". Try a different address."})
+			c.JSON(http.StatusConflict, errorResponse("address_taken", "Someone already uses "+fullName+". Try a different address.", nil))
 			return
 		}
 		internalErr(c, err)
@@ -162,7 +162,16 @@ func (h handlers) listOwnershipTransfers(c *gin.Context) {
 func (h handlers) acceptOwnershipTransfer(c *gin.Context) {
 	x, err := h.deps.repository.AcceptOwnershipTransfer(c.Request.Context(), c.Param("id"), *current(c))
 	if err != nil {
-		forbidden(c, "not allowed")
+		switch {
+		case errors.Is(err, repo.ErrNotFound):
+			notFound(c)
+		case errors.Is(err, repo.ErrNotTransferTarget):
+			forbidden(c, "you are not the recipient of this transfer")
+		case errors.Is(err, repo.ErrTransferNotPending):
+			c.JSON(http.StatusConflict, errorResponse("invalid_transfer_state", "transfer is not pending", nil))
+		default:
+			internalErr(c, err)
+		}
 		return
 	}
 	c.JSON(http.StatusOK, x)
@@ -220,7 +229,10 @@ func (h handlers) patchServiceAccount(c *gin.Context) {
 		Name     string `json:"name"`
 		Disabled *bool  `json:"disabled"`
 	}
-	_ = c.ShouldBindJSON(&in)
+	if err := c.ShouldBindJSON(&in); err != nil {
+		badRequest(c, "invalid body")
+		return
+	}
 	sa, err := h.deps.repository.UpdateServiceAccount(c.Request.Context(), c.Param("id"), in.Name, in.Disabled)
 	if err != nil {
 		internalErr(c, err)
@@ -244,6 +256,7 @@ func (h handlers) createServiceAccountKey(c *gin.Context) {
 	var in struct {
 		Name string `json:"name"`
 	}
+	// Body is optional here; an absent name defaults to "default".
 	_ = c.ShouldBindJSON(&in)
 	if in.Name == "" {
 		in.Name = "default"

@@ -70,12 +70,10 @@ func resolveGrantPrincipal(c *gin.Context, r repo.Repository, address string, pr
 // @Success 201 {object} map[string]interface{}
 // @Router /v1/documents/{id}/grants [post]
 func (h handlers) createGrant(c *gin.Context) {
-	p := current(c)
-	role, _ := h.deps.repository.RoleForDocument(c.Request.Context(), *p, c.Param("id"))
-	if role != repo.RoleOwner {
-		forbidden(c, "owner role required")
+	if !h.needDocRole(c, c.Param("id"), repo.RoleOwner) {
 		return
 	}
+	p := current(c)
 	var in struct {
 		Address   string `json:"address"`
 		Principal struct {
@@ -196,6 +194,6 @@ func (h handlers) deleteGrant(c *gin.Context) {
 		internalErr(c, err)
 		return
 	}
-	incGrant("deleted", "unknown", "unknown", actorType(c))
+	incGrant("deleted", labelUnknown, labelUnknown, actorType(c))
 	c.Status(http.StatusNoContent)
 }

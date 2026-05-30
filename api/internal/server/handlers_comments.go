@@ -19,12 +19,10 @@ import (
 // @Success 201 {object} map[string]interface{}
 // @Router /v1/documents/{id}/comments [post]
 func (h handlers) createComment(c *gin.Context) {
-	p := current(c)
-	role, _ := h.deps.repository.RoleForDocument(c.Request.Context(), *p, c.Param("id"))
-	if !atLeast(role, repo.RoleCommenter) {
-		forbidden(c, "commenter role required")
+	if !h.needDocRole(c, c.Param("id"), repo.RoleCommenter) {
 		return
 	}
+	p := current(c)
 	var in struct {
 		VersionID string      `json:"version_id"`
 		Body      string      `json:"body"`
@@ -95,7 +93,10 @@ func (h handlers) patchComment(c *gin.Context) {
 		return
 	}
 	var in struct{ Body, Status string }
-	_ = c.ShouldBindJSON(&in)
+	if err := c.ShouldBindJSON(&in); err != nil {
+		badRequest(c, "invalid body")
+		return
+	}
 	if in.Status != "" && in.Status != commentStatusOpen && in.Status != commentStatusResolved {
 		badRequest(c, "invalid comment status")
 		return
@@ -132,7 +133,7 @@ func (h handlers) deleteComment(c *gin.Context) {
 		internalErr(c, err)
 		return
 	}
-	incComment("deleted", "unknown", actorType(c))
+	incComment("deleted", labelUnknown, actorType(c))
 	c.Status(http.StatusNoContent)
 }
 
