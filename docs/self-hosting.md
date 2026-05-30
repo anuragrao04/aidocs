@@ -32,20 +32,54 @@ authenticated application origin.
 
 ## Configure Google OAuth
 
-Create an OAuth web client in Google Cloud and add this callback URL:
+aidocs authenticates humans with Google. You need an OAuth **web** client; its
+client ID and secret become `GOOGLE_OAUTH_CLIENT_ID` /
+`GOOGLE_OAUTH_CLIENT_SECRET`.
 
-```text
-https://aidocs.example.com/v1/auth/google/callback
-```
+### Step by step (Google Cloud Console)
 
-For local testing add:
+1. **Pick or create a project.** Go to
+   [console.cloud.google.com](https://console.cloud.google.com/), open the
+   project picker (top bar), and create a project (e.g. `aidocs`) or select an
+   existing one. Everything below lives inside this project.
+2. **Configure the OAuth consent screen** (APIs & Services → OAuth consent
+   screen). Choose the user type:
+   - **Internal** — only accounts in your Google Workspace organization can
+     sign in. This is the right choice for an `org` deployment (see below) and
+     skips Google's app-verification review.
+   - **External** — any Google account can sign in. Use this for a `public`
+     deployment. While the app is in "Testing" only listed test users can log
+     in; click **Publish app** to open it to everyone.
 
-```text
-http://localhost:8080/v1/auth/google/callback
-```
+   Fill in the app name, support email, and developer contact. You do **not**
+   need any sensitive/restricted scopes — aidocs only reads basic profile and
+   email, which are covered by the default non-sensitive scopes.
+3. **Create the OAuth client** (APIs & Services → Credentials → Create
+   credentials → OAuth client ID). Application type: **Web application**. Give
+   it a name (e.g. `aidocs web`).
+4. **Add the authorized redirect URI** — this must exactly match your
+   deployment's origin plus `/v1/auth/google/callback`:
+
+   ```text
+   https://aidocs.example.com/v1/auth/google/callback
+   ```
+
+   For local testing also add:
+
+   ```text
+   http://localhost:8080/v1/auth/google/callback
+   ```
+
+   You can list multiple redirect URIs on one client (e.g. prod + local). The
+   host must match `AIDOCS_APP_ORIGIN` exactly — scheme, host, and no trailing
+   slash. (No "Authorized JavaScript origins" are required; aidocs uses the
+   server-side redirect flow.)
+5. **Copy the credentials.** After creating the client, copy the **Client ID**
+   and **Client secret** into `GOOGLE_OAUTH_CLIENT_ID` and
+   `GOOGLE_OAUTH_CLIENT_SECRET` (or your secret store / Helm secret ref).
 
 Optionally restrict logins to specific email domains with
-`ALLOWED_OAUTH_DOMAINS=example.com,company.com`.
+`ALLOWED_OAUTH_DOMAINS=example.com,company.com` (public deployments only).
 
 ### Deployment type: public vs org
 
@@ -62,6 +96,11 @@ aidocs runs in one of two modes, set by `AIDOCS_DEPLOYMENT`:
 On an org deployment the org domains are the login gate, so you do not also
 need `ALLOWED_OAUTH_DOMAINS`. The document permission model is identical in both
 modes; only the login gate and the wording differ.
+
+> For an `org` deployment, set the OAuth consent screen to **Internal** so
+> Google itself restricts sign-in to your Workspace organization, and set
+> `AIDOCS_ORG_DOMAINS` to the same email domain(s). The two together ensure
+> only org members can authenticate.
 
 ```text
 AIDOCS_DEPLOYMENT=org
