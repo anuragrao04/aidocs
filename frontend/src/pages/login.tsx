@@ -1,8 +1,26 @@
 import { useTitle } from "@/lib/use-title";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, MessageSquareText, Share2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/api";
+
+const HIGHLIGHTS = [
+  {
+    icon: Sparkles,
+    title: "Built for AI output",
+    body: "Your agents publish finished documents straight to aidocs.",
+  },
+  {
+    icon: MessageSquareText,
+    title: "Comment in context",
+    body: "Highlight a passage and leave feedback, just like Google Docs.",
+  },
+  {
+    icon: Share2,
+    title: "Share and iterate",
+    body: "Versioned, shareable, and ready for the next revision.",
+  },
+];
 
 export function LoginPage() {
   useTitle("Sign in");
@@ -10,28 +28,50 @@ export function LoginPage() {
   const next = params.get("next") || "/app/documents";
   const url = api.loginURL(next);
   return (
-    <div className="flex min-h-full flex-col items-center justify-center bg-[var(--color-bg)] px-6 py-12">
+    <div className="relative flex min-h-full flex-col items-center justify-center overflow-hidden bg-[var(--color-bg)] px-6 py-12">
+      {/* Subtle accent glow behind the card. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/3 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--color-accent)] opacity-[0.07] blur-3xl"
+      />
       <Link
         to="/"
         className="absolute left-6 top-6 flex items-center gap-1 text-sm text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
       >
         <ArrowLeft className="h-4 w-4" /> Home
       </Link>
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <Sparkles className="mb-3 h-7 w-7 text-[var(--color-accent)]" />
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Sign in to aidocs
-          </h1>
-          <p className="mt-2 text-sm text-[var(--color-fg-muted)]">
-            Review documents your agents publish.
-          </p>
+      <div className="relative w-full max-w-sm">
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 shadow-sm">
+          <div className="mb-7 flex flex-col items-center text-center">
+            <img src="/favicon.svg" alt="" className="mb-4 h-14 w-14" />
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Sign in to aidocs
+            </h1>
+            <p className="mt-2 text-sm text-[var(--color-fg-muted)]">
+              The review layer for documents your agents write.
+            </p>
+          </div>
+          <Button asChild size="lg" className="w-full">
+            <a href={url}>
+              <GoogleIcon /> Continue with Google
+            </a>
+          </Button>
         </div>
-        <Button asChild size="lg" className="w-full">
-          <a href={url}>
-            <GoogleIcon /> Continue with Google
-          </a>
-        </Button>
+        <ul className="mt-6 space-y-3">
+          {HIGHLIGHTS.map((h) => (
+            <li key={h.title} className="flex items-start gap-3">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[var(--color-accent-muted)] text-[var(--color-accent)]">
+                <h.icon className="h-3.5 w-3.5" />
+              </span>
+              <div>
+                <div className="text-sm font-medium">{h.title}</div>
+                <div className="text-xs text-[var(--color-fg-muted)]">
+                  {h.body}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
