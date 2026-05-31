@@ -380,6 +380,13 @@ func (s *Store) ListDocuments(ctx context.Context, p auth.Principal) ([]repo.Doc
 	}
 	return out, nil
 }
+func (s *Store) RecordDocumentOpened(ctx context.Context, documentID string, p auth.Principal) error {
+	return s.q.RecordWorkspaceEntry(ctx, dbsqlc.RecordWorkspaceEntryParams{
+		DocumentID:    documentID,
+		PrincipalType: string(p.Type),
+		PrincipalID:   p.ID,
+	})
+}
 func (s *Store) UpdateDocument(ctx context.Context, id, title string) (repo.Document, error) {
 	if title != "" {
 		if err := s.q.UpdateDocumentTitle(ctx, dbsqlc.UpdateDocumentTitleParams{Title: title, ID: id}); err != nil {

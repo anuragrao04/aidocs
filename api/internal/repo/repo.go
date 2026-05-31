@@ -148,6 +148,10 @@ type Repository interface {
 	RoleForDocument(ctx context.Context, principal auth.Principal, documentID string) (Role, error)
 	CreateDocument(ctx context.Context, owner auth.Principal, title string, html []byte) (Document, Version, error)
 	ListDocuments(ctx context.Context, principal auth.Principal) ([]Document, error)
+	// RecordDocumentOpened notes that a principal opened a document, so a
+	// broadly-shared ("anyone") document joins their workspace listing after
+	// first open. Idempotent.
+	RecordDocumentOpened(ctx context.Context, documentID string, principal auth.Principal) error
 	GetDocument(ctx context.Context, id string) (Document, error)
 	UpdateDocument(ctx context.Context, id, title string) (Document, error)
 	DeleteDocument(ctx context.Context, id string) error
@@ -467,6 +471,9 @@ func (m *Memory) ListDocuments(ctx context.Context, principal auth.Principal) ([
 		out = append(out, d)
 	}
 	return out, nil
+}
+func (m *Memory) RecordDocumentOpened(ctx context.Context, documentID string, principal auth.Principal) error {
+	return nil
 }
 func (m *Memory) UpdateDocument(ctx context.Context, id, title string) (Document, error) {
 	m.mu.Lock()

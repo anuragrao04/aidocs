@@ -87,6 +87,14 @@ func (h handlers) getDocument(c *gin.Context) {
 		notFound(c)
 		return
 	}
+	// Opening a document adds it to the viewer's workspace, so a broadly-shared
+	// ("anyone") document joins their listing after first open. The owner is
+	// already listed; recording for them is unnecessary. Best-effort: a failure
+	// here must not block serving the document.
+	p := current(c)
+	if !(p.Type == auth.PrincipalUser && p.ID == d.Owner.ID) {
+		_ = h.deps.repository.RecordDocumentOpened(c.Request.Context(), d.ID, *p)
+	}
 	c.JSON(http.StatusOK, d)
 }
 

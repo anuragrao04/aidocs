@@ -54,6 +54,13 @@ type Document struct {
 	UpdatedAt        pgtype.Timestamptz
 }
 
+type DocumentWorkspaceEntry struct {
+	DocumentID    string
+	PrincipalType string
+	PrincipalID   string
+	AddedAt       pgtype.Timestamptz
+}
+
 type OauthState struct {
 	ID        string
 	Kind      string

@@ -76,6 +76,78 @@ func TestPostgresRepositoryDocumentGrantVersionCommentFlow(t *testing.T) {
 	}
 }
 
+// A public ("anyone") grant gives a stranger access to the document via the
+// link, but it only joins their workspace listing once they open it -- and an
+// explicit grant lists the document without needing an open.
+func TestPostgresAnyoneGrantListsAfterOpen(t *testing.T) {
+	url := os.Getenv("AIDOCS_TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("set AIDOCS_TEST_DATABASE_URL to run postgres integration tests")
+	}
+	if err := db.Migrate(url); err != nil {
+		t.Fatal(err)
+	}
+	store, err := pgrepo.Connect(context.Background(), url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+
+	owner := auth.Principal{Type: auth.PrincipalUser, ID: "usr_pg_anyone_owner", Email: "anyone-owner@example.com", Name: "Owner"}
+	doc, _, err := store.CreateDocument(ctx, owner, "Public sample", []byte("<html>public</html>"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateGrant(ctx, doc.ID, auth.Principal{Type: auth.PrincipalAnyone}, repo.RoleViewer, owner); err != nil {
+		t.Fatal(err)
+	}
+
+	stranger := auth.Principal{Type: auth.PrincipalUser, ID: "usr_pg_anyone_stranger", Email: "stranger@example.com", Name: "Stranger"}
+
+	// The stranger can reach the document via the public link.
+	role, err := store.RoleForDocument(ctx, stranger, doc.ID)
+	if err != nil || role != repo.RoleViewer {
+		t.Fatalf("stranger role=%s err=%v, want viewer", role, err)
+	}
+
+	// Before opening, the public document is not in the stranger's workspace.
+	if listed(t, store, stranger, doc.ID) {
+		t.Fatalf("public doc %s listed before stranger opened it", doc.ID)
+	}
+
+	// Opening it adds it to their workspace.
+	if err := store.RecordDocumentOpened(ctx, doc.ID, stranger); err != nil {
+		t.Fatal(err)
+	}
+	if !listed(t, store, stranger, doc.ID) {
+		t.Fatalf("public doc %s not listed after stranger opened it", doc.ID)
+	}
+
+	// A second user with an explicit grant sees it without opening.
+	invitee := auth.Principal{Type: auth.PrincipalUser, ID: "usr_pg_anyone_invitee", Email: "invitee@example.com", Name: "Invitee"}
+	if _, err := store.CreateGrant(ctx, doc.ID, invitee, repo.RoleViewer, owner); err != nil {
+		t.Fatal(err)
+	}
+	if !listed(t, store, invitee, doc.ID) {
+		t.Fatalf("explicitly-granted doc %s not listed for invitee", doc.ID)
+	}
+}
+
+func listed(t *testing.T, store *pgrepo.Store, p auth.Principal, docID string) bool {
+	t.Helper()
+	docs, err := store.ListDocuments(context.Background(), p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range docs {
+		if d.ID == docID {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPostgresCreateDocumentDeletesBlobWhenDBFailsAfterPut(t *testing.T) {
 	url := os.Getenv("AIDOCS_TEST_DATABASE_URL")
 	if url == "" {
