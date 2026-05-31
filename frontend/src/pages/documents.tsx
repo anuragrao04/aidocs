@@ -46,18 +46,20 @@ export function DocumentsPage() {
   const { state: onb } = useOnboarding();
   const nav = useNavigate();
   useEffect(() => {
-    // First-time visitor with no documents → send to setup guide.
+    // First-time visitor (fresh onboarding state, no required steps done) →
+    // send them to the setup guide. This is purely local: a new login on a
+    // new browser sees the tutorial; whatever is already in their workspace
+    // (e.g. a doc shared with them before signup) is irrelevant. They can
+    // skip the tutorial at any time.
     if (
       onb.status === "active" &&
       !onb.steps.cli_installed &&
       !onb.steps.cli_authed &&
-      !onb.steps.agent_configured &&
-      docs.data &&
-      (docs.data.items || []).length === 0
+      !onb.steps.agent_configured
     ) {
       nav("/app/start", { replace: true });
     }
-  }, [onb, docs.data, nav]);
+  }, [onb, nav]);
   useEffect(() => {
     // Once the user has at least one document, mark the onboarding step.
     if (docs.data && (docs.data.items || []).length > 0) {
