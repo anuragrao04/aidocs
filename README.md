@@ -1,3 +1,7 @@
+> [!important]
+> This project is now maintained at [razorpay/slashdocs](https://github.com/razorpay/slashdocs)
+
+
 # aidocs
 
 Give your agents the power to publish beautiful, reviewable documents.
